@@ -1,6 +1,5 @@
 import { ethers } from "hardhat";
 
-import { expect } from "chai";
 import {
   Archetype__factory,
   Archetype as IArchetype,
@@ -9,10 +8,10 @@ import {
   ArchetypeBatch__factory,
   ArchetypePayouts__factory,
   Factory__factory,
-} from "../typechain";
+} from "../../typechain-types";
 import Invitelist from "../lib/invitelist";
 import { IArchetypeConfig, IArchetypePayoutConfig } from "../lib/types";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import ipfsh from "ipfsh";
 import { Contract } from "ethers";
 
