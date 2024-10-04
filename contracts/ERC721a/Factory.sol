@@ -42,6 +42,7 @@ contract Factory is Ownable {
     Archetype token = Archetype(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
 
+    token.transferOwnership(_receiver);
     if (msg.value > 0) {
       (bool sent, ) = payable(_receiver).call{ value: msg.value }("");
       require(sent, "1");

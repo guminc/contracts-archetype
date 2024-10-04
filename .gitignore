@@ -113,3 +113,4 @@ dist
 .tern-port
 
 # More ignores
+typechain-types
