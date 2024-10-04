@@ -2,7 +2,7 @@
 
 ## Description
 
-TODO\*
+Scatter.art Archetype NFT Contracts for EVM & ZKsync 
 
 ## Project Layout
 
