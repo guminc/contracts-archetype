@@ -13,6 +13,7 @@ import {
   Factory,
   TestErc20,
 } from "../../typechain-types";
+import { BaseContract } from "ethers";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -35,6 +36,10 @@ const HASHONE =
   "0x0000000000000000000000000000000000000000000000000000000000000001";
 const HASH256 =
   "0x00000000000000000000000000000000000000000000000000000000000000ff";
+
+function asContractType<T extends BaseContract>(contract: any): T {
+  return contract as T;
+}
 
 describe("Factory", function () {
   let Archetype;
@@ -74,10 +79,14 @@ describe("Factory", function () {
     };
 
     const ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
-    archetypeBatch = await ArchetypeBatch.deploy();
+    archetypeBatch = asContractType<ArchetypeBatch>(
+      await ArchetypeBatch.deploy()
+    );
 
     const ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
+    archetypeLogic = asContractType<ArchetypeLogic>(
+      await ArchetypeLogic.deploy()
+    );
 
     Archetype = await ethers.getContractFactory("Archetype", {
       libraries: {
@@ -88,14 +97,16 @@ describe("Factory", function () {
     const ArchetypePayouts = await ethers.getContractFactory(
       "ArchetypePayouts"
     );
-    archetypePayouts = await ArchetypePayouts.deploy();
+    archetypePayouts = asContractType<ArchetypePayouts>(
+      await ArchetypePayouts.deploy()
+    );
     console.log(await archetypePayouts.getAddress());
 
     archetype = await Archetype.deploy();
     const archetypeAddress = await archetype.getAddress();
 
     const Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy(archetypeAddress);
+    factory = asContractType<Factory>(await Factory.deploy(archetypeAddress));
     const factoryAddress = await factory.getAddress();
 
     console.log({
@@ -217,8 +228,10 @@ describe("Factory", function () {
     expect(symbol).to.equal(DEFAULT_SYMBOL);
     expect(owner).to.equal(accountOne.address);
 
-    ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
+    const ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
+    archetypeLogic = asContractType<ArchetypeLogic>(
+      await ArchetypeLogic.deploy()
+    );
     const NewArchetype = await ethers.getContractFactory("Archetype", {
       libraries: {
         ArchetypeLogic: await archetypeLogic.getAddress(),
@@ -922,7 +935,6 @@ describe("Factory", function () {
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
-        platformFee: 500,
         defaultRoyalty: 500,
         discounts: {
           affiliateDiscount: 0, // 10%
@@ -1854,9 +1866,9 @@ describe("Factory", function () {
     const newCollectionAddress = result.logs[0].address || "";
     const nft = Archetype.attach(newCollectionAddress);
 
-    const erc20: TestErc20 = await (
-      await ethers.getContractFactory("TestErc20")
-    ).deploy();
+    const erc20: TestErc20 = asContractType<TestErc20>(
+      await (await ethers.getContractFactory("TestErc20")).deploy()
+    );
     const tokenAddress = await erc20.getAddress();
 
     const balanceBefore = await erc20.balanceOf(holder.address);

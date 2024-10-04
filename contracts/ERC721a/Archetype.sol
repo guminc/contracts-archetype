@@ -19,14 +19,14 @@ import "./ArchetypeLogic.sol";
 import "erc721a-upgradeable/contracts/ERC721AUpgradeable.sol";
 import "erc721a-upgradeable/contracts/ERC721A__Initializable.sol";
 import "erc721a-upgradeable/contracts/extensions/ERC721AQueryableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./ERC721A__OwnableUpgradeable.sol";
 import "solady/src/utils/LibString.sol";
 import "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
 contract Archetype is
   ERC721A__Initializable,
   ERC721AUpgradeable,
-  OwnableUpgradeable,
+  ERC721A__OwnableUpgradeable,
   ERC2981Upgradeable,
   ERC721AQueryableUpgradeable
 {
@@ -85,7 +85,7 @@ contract Archetype is
       }
     }
     config = config_;
-    __Ownable_init(_receiver);
+    __Ownable_init();
 
     uint256 totalShares = payoutConfig_.ownerBps +
       payoutConfig_.platformBps +
@@ -539,7 +539,7 @@ contract Archetype is
     return 1;
   }
 
-  function _msgSender() internal view override returns (address) {
+  function _msgSender() internal view returns (address) {
     return msg.sender == BATCH ? tx.origin : msg.sender;
   }
 
