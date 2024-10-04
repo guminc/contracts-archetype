@@ -1,8 +1,12 @@
-# ZKsync Hardhat project template
+# Scatter.art NFT Archetype Contracts
 
-This project was scaffolded with [zksync-cli](https://github.com/matter-labs/zksync-cli).
+## Description
+
+TODO\*
 
 ## Project Layout
+
+This project was scaffolded with [zksync-cli](https://github.com/matter-labs/zksync-cli).
 
 - `/contracts`: Contains solidity smart contracts.
 - `/deploy`: Scripts for contract deployment and interaction.

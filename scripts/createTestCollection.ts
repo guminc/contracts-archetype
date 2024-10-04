@@ -6,7 +6,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function main() {
   const Factory = await ethers.getContractFactory("Factory");
 
-  const factory = Factory.attach("0xC66271F08eA30F968dBeEff795c2FF652af7C954");
+  const factory = Factory.attach("0x0855c3f7d53f906DDB1236E9044Dc559C7424D92");
   const factoryAddress = await factory.getAddress();
 
   console.log("Contract Factory is:", factoryAddress);

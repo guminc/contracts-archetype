@@ -1,7 +1,7 @@
 {
   "name": "contracts-archetype",
   "version": "1.0.0",
-  "description": "Hardhat development environment for EVM & ZKsync archetype smart contracts",
+  "description": "Scatter.art Archetype NFT Contracts for EVM & ZKsync",
   "author": "Gum Inc",
   "scripts": {
     "compile": "hardhat compile",

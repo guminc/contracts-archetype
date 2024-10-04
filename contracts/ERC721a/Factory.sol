@@ -37,6 +37,7 @@ contract Factory is Ownable {
     PayoutConfig calldata payoutConfig
   ) external payable returns (address) {
     bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
+    // todo: fix for zksync
     address clone = Clones.cloneDeterministic(archetype, salt);
     Archetype token = Archetype(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
