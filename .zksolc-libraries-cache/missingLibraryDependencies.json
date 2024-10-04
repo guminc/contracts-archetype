@@ -1,0 +1,7 @@
+[
+    {
+        "contractName": "ArchetypeLogic",
+        "contractPath": "contracts/ERC721a/ArchetypeLogic.sol",
+        "missingLibraries": []
+    }
+]
