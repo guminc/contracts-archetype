@@ -22,13 +22,24 @@ async function replaceConstants(filePath) {
   fs.writeFileSync(filePath, data, "utf8");
 }
 
-const contractPath = path.resolve(
+const erc721aContractPath = path.resolve(
   __dirname,
   "../contracts/ERC721a/ArchetypeLogicErc721a.sol"
 );
-const originalFile = fs.readFileSync(contractPath, "utf8");
+const originalErc721aFile = fs.readFileSync(erc721aContractPath, "utf8");
 fs.writeFileSync(
   "./contracts/ERC721a/ArchetypeLogicErc721a.sol.bak",
-  originalFile
+  originalErc721aFile
 );
-replaceConstants(contractPath);
+replaceConstants(erc721aContractPath);
+
+const erc1155RandomContractPath = path.resolve(
+  __dirname,
+  "../contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol"
+);
+const originalErc1155File = fs.readFileSync(erc1155RandomContractPath, "utf8");
+fs.writeFileSync(
+  "./contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol.bak",
+  originalErc1155File
+);
+replaceConstants(erc1155RandomContractPath);

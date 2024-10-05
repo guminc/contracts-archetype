@@ -1,16 +1,29 @@
 let fs = require("fs");
 let path = require("path");
 
-const contractPath = path.resolve(
+const erc721aContractPath = path.resolve(
   __dirname,
   "../contracts/ERC721a/ArchetypeLogicErc721a.sol"
 );
-const backupFilePath = path.resolve(
+const erc721aBackupFilePath = path.resolve(
   __dirname,
   "../contracts/ERC721a/ArchetypeLogicErc721a.sol.bak"
 );
-const backupFile = fs.readFileSync(backupFilePath, "utf8");
-fs.writeFileSync(contractPath, backupFile);
+const erc721aBackupFile = fs.readFileSync(erc721aBackupFilePath, "utf8");
+fs.writeFileSync(erc721aContractPath, erc721aBackupFile);
+fs.unlinkSync(erc721aBackupFilePath);
 
-// Delete the backup file
-fs.unlinkSync(backupFilePath);
+const erc1155RandomContractPath = path.resolve(
+  __dirname,
+  "../contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol"
+);
+const erc1155RandomBackupFilePath = path.resolve(
+  __dirname,
+  "../contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol.bak"
+);
+const erc1155RandomBackupFile = fs.readFileSync(
+  erc1155RandomBackupFilePath,
+  "utf8"
+);
+fs.writeFileSync(erc1155RandomContractPath, erc1155RandomBackupFile);
+fs.unlinkSync(erc1155RandomBackupFilePath);

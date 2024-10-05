@@ -1,27 +1,32 @@
-import { ethers, upgrades } from "hardhat";
+import { ethers } from "hardhat";
 
 import { expect } from "chai";
-import {
-  Archetype__factory,
-  Archetype as IArchetype,
-  ArchetypePayouts as IArchetypePayouts,
-  ArchetypeLogic__factory,
-  ArchetypeBatch__factory,
-  Factory__factory,
-  ArchetypePayouts__factory,
-} from "../typechain-types";
 import Invitelist from "../lib/invitelist";
-import { IArchetypeConfig, IArchetypePayoutConfig } from "../lib/types";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import {
+  IArchetypeErc1155RandomConfig,
+  IArchetypePayoutConfig,
+} from "../lib/types";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import ipfsh from "ipfsh";
-import { Contract } from "ethers";
+import {
+  ArchetypeErc1155Random,
+  ArchetypeBatch,
+  ArchetypeLogicErc1155Random,
+  ArchetypePayouts,
+  FactoryErc1155Random,
+  TestErc20,
+} from "../../typechain-types";
+import { BaseContract } from "ethers";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const DEFAULT_NAME = "Pookie";
 const DEFAULT_SYMBOL = "POOKIE";
 let AFFILIATE_SIGNER: SignerWithAddress;
 let FULFILLMENT_SIGNER: SignerWithAddress;
-let DEFAULT_CONFIG: IArchetypeConfig;
+let DEFAULT_CONFIG: IArchetypeErc1155RandomConfig;
 let DEFAULT_PAYOUT_CONFIG: IArchetypePayoutConfig;
+
 // this is an IPFS content ID which stores a list of addresses ({address: string[]})
 // eg: https://ipfs.io/ipfs/bafkreih2kyxirba6a6dyzt4tsdqb5iim3soprumtewq6garaohkfknqlaq
 // utility for converting CID to bytes32: https://github.com/factoria-org/ipfsh
@@ -36,13 +41,17 @@ const HASHONE =
 const HASH256 =
   "0x00000000000000000000000000000000000000000000000000000000000000ff";
 
+function asContractType<T extends BaseContract>(contract: any): T {
+  return contract as T;
+}
+
 const randomSeedNumber = () => {
-  return ethers.toBigInt(ethers.utils.randomBytes(32));
+  return ethers.toBigInt(ethers.randomBytes(32));
 };
 
 const generateFulfillmentSignature = async (seed) => {
   const signature = await FULFILLMENT_SIGNER.signMessage(
-    ethers.utils.arrayify(ethers.utils.solidityKeccak256(["uint256"], [seed]))
+    ethers.getBytes(ethers.solidityPackedKeccak256(["uint256"], [seed]))
   );
   return signature;
 };
@@ -50,8 +59,8 @@ const generateFulfillmentSignature = async (seed) => {
 const generateSeedHash = async () => {
   const seed = randomSeedNumber();
 
-  const seedHash = ethers.utils.keccak256(
-    ethers.utils.defaultAbiCoder.encode(["uint256"], [seed])
+  const seedHash = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [seed])
   );
 
   const signature = await generateFulfillmentSignature(seed);
@@ -63,17 +72,12 @@ const generateTokenPool = (x: number): number[] =>
   [].concat(...[1, 2, 3, 4, 5].map((i) => Array(x / 5).fill(i)));
 
 describe("Factory", function () {
-  let Archetype: Archetype__factory;
-  let archetype: IArchetype;
-  let ArchetypeLogic: ArchetypeLogic__factory;
-  let archetypeLogic: Contract;
-  let ArchetypeBatch: ArchetypeBatch__factory;
-  let archetypeBatch: Contract;
-  let ArchetypePayouts: ArchetypePayouts__factory;
-  let archetypePayouts: IArchetypePayouts;
-  let Factory: Factory__factory;
-  let factory: Contract;
-  let vrfCoordinatorMock: Contract;
+  let ArchetypeErc1155Random;
+  let archetype: ArchetypeErc1155Random;
+  let archetypeLogic: ArchetypeLogicErc1155Random;
+  let archetypeBatch: ArchetypeBatch;
+  let archetypePayouts: ArchetypePayouts;
+  let factory: FactoryErc1155Random;
 
   before(async function () {
     AFFILIATE_SIGNER = (await ethers.getSigners())[4]; // account[4]
@@ -107,30 +111,47 @@ describe("Factory", function () {
       ownerAltPayout: ZERO,
     };
 
-    ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
-    archetypeBatch = await ArchetypeBatch.deploy();
+    const ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
+    archetypeBatch = asContractType<ArchetypeBatch>(
+      await ArchetypeBatch.deploy()
+    );
 
-    ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
-    Archetype = await ethers.getContractFactory("Archetype", {
-      libraries: {
-        ArchetypeLogic: archetypeLogic.address,
-      },
-    });
+    const ArchetypeLogic = await ethers.getContractFactory(
+      "ArchetypeLogicErc1155Random"
+    );
+    archetypeLogic = asContractType<ArchetypeLogicErc1155Random>(
+      await ArchetypeLogic.deploy()
+    );
 
-    ArchetypePayouts = await ethers.getContractFactory("ArchetypePayouts");
-    archetypePayouts = await ArchetypePayouts.deploy();
+    ArchetypeErc1155Random = await ethers.getContractFactory(
+      "ArchetypeErc1155Random",
+      {
+        libraries: {
+          ArchetypeLogic: await archetypeLogic.getAddress(),
+        },
+      }
+    );
 
-    archetype = await Archetype.deploy();
-    await archetype.deployed();
+    const ArchetypePayouts = await ethers.getContractFactory(
+      "ArchetypePayouts"
+    );
+    archetypePayouts = asContractType<ArchetypePayouts>(
+      await ArchetypePayouts.deploy()
+    );
 
-    Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy(archetype.address);
-    await factory.deployed();
+    archetype = await ArchetypeErc1155Random.deploy();
+    const archetypeAddress = await archetype.getAddress();
+
+    const Factory = await ethers.getContractFactory("FactoryErc1155Random");
+    factory = asContractType<FactoryErc1155Random>(
+      await Factory.deploy(archetypeAddress)
+    );
+
+    const factoryAddress = await factory.getAddress();
 
     console.log({
-      factoryAddress: factory.address,
-      archetypeAddress: archetype.address,
+      factoryAddress: factoryAddress,
+      archetypeAddress: archetypeAddress,
     });
   });
 
@@ -166,9 +187,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155Random.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();

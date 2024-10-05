@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { expect } from "chai";
 import Invitelist from "../lib/invitelist";
-import { IArchetypeConfig, IArchetypePayoutConfig } from "../lib/types";
+import { IArchetypeErc721aConfig, IArchetypePayoutConfig } from "../lib/types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import ipfsh from "ipfsh";
 import {
@@ -20,7 +20,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const DEFAULT_NAME = "Pookie";
 const DEFAULT_SYMBOL = "POOKIE";
 let AFFILIATE_SIGNER: SignerWithAddress;
-let DEFAULT_CONFIG: IArchetypeConfig;
+let DEFAULT_CONFIG: IArchetypeErc721aConfig;
 let DEFAULT_PAYOUT_CONFIG: IArchetypePayoutConfig;
 
 // this is an IPFS content ID which stores a list of addresses ({address: string[]})

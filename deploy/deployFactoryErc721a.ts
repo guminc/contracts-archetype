@@ -11,7 +11,7 @@ async function main() {
 
   const Archetype = await ethers.getContractFactory("ArchetypeErc721a", {
     libraries: {
-      ArchetypeLogic: archetypeLogic.address,
+      ArchetypeLogic: archetypeLogicAddress,
     },
   });
 
