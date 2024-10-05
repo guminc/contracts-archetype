@@ -4,14 +4,14 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
   const ArchetypeLogic = await ethers.getContractFactory(
-    "ArchetypeLogicErc721a"
+    "ArchetypeLogicErc1155Random"
   );
   const archetypeLogic = await ArchetypeLogic.deploy();
   const archetypeLogicAddress = await archetypeLogic.getAddress();
 
-  const Archetype = await ethers.getContractFactory("ArchetypeErc721a", {
+  const Archetype = await ethers.getContractFactory("ArchetypeErc1155Random", {
     libraries: {
-      ArchetypeLogicErc721a: archetypeLogicAddress,
+      ArchetypeLogicErc1155Random: archetypeLogicAddress,
     },
   });
 
@@ -21,7 +21,7 @@ async function main() {
   console.log("Archetype Logic deployed to:", archetypeLogicAddress);
   console.log("Archetype deployed to:", archetypeAddress);
 
-  const Factory = await ethers.getContractFactory("FactoryErc721a");
+  const Factory = await ethers.getContractFactory("FactoryErc1155Random");
 
   const factory = await Factory.deploy(archetypeAddress);
 
