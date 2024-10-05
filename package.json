@@ -8,7 +8,9 @@
     "clean": "hardhat clean",
     "preTest": "node test/preTest.js",
     "postTest": "node test/postTest.js",
-    "test": "npm run preTest && npx hardhat test && npm run postTest"
+    "testErc721a": "npx hardhat test ./test/ERC721a/archetypeErc721a.test.ts",
+    "testErc1155Random": "npx hardhat test ./test/ERC1155-Random/archetypeErc1155Random.test.ts",
+    "test": "npm run preTest && npm run testErc721a &&  npm run testErc1155Random && npm run postTest"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.7.0",

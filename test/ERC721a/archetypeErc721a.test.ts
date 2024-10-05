@@ -1829,7 +1829,6 @@ describe("FactoryErc721a", function () {
       return value;
     }
 
-    const royalty = await nft.royaltyInfo(0, ethers.parseEther("1"));
     await expect(
       JSON.stringify(
         await nft.royaltyInfo(0, ethers.parseEther("1")),
