@@ -24,8 +24,11 @@ async function replaceConstants(filePath) {
 
 const contractPath = path.resolve(
   __dirname,
-  "../contracts/ERC721a/ArchetypeLogic.sol"
+  "../contracts/ERC721a/ArchetypeLogicErc721a.sol"
 );
 const originalFile = fs.readFileSync(contractPath, "utf8");
-fs.writeFileSync("./contracts/ERC721a/ArchetypeLogic.sol.bak", originalFile);
+fs.writeFileSync(
+  "./contracts/ERC721a/ArchetypeLogicErc721a.sol.bak",
+  originalFile
+);
 replaceConstants(contractPath);

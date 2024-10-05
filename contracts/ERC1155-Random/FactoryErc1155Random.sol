@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-// Factory v0.8.0
+// Factory v0.4.0
 //
 // 8888888888                888
 // 888                       888
@@ -15,12 +15,12 @@
 
 pragma solidity ^0.8.4;
 
-import "./Archetype.sol";
-import "./ArchetypeLogic.sol";
+import "./ArchetypeErc1155Random.sol";
+import "./ArchetypeLogicErc1155Random.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Factory is Ownable {
+contract FactoryErc1155Random is Ownable {
   event CollectionAdded(address indexed sender, address indexed receiver, address collection);
   address public archetype;
 
@@ -37,9 +37,8 @@ contract Factory is Ownable {
     PayoutConfig calldata payoutConfig
   ) external payable returns (address) {
     bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
-    // todo: fix for zksync
     address clone = Clones.cloneDeterministic(archetype, salt);
-    Archetype token = Archetype(clone);
+    ArchetypeErc1155Random token = ArchetypeErc1155Random(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
 
     token.transferOwnership(_receiver);

@@ -3,11 +3,11 @@ let path = require("path");
 
 const contractPath = path.resolve(
   __dirname,
-  "../contracts/ERC721a/ArchetypeLogic.sol"
+  "../contracts/ERC721a/ArchetypeLogicErc721a.sol"
 );
 const backupFilePath = path.resolve(
   __dirname,
-  "../contracts/ERC721a/ArchetypeLogic.sol.bak"
+  "../contracts/ERC721a/ArchetypeLogicErc721a.sol.bak"
 );
 const backupFile = fs.readFileSync(backupFilePath, "utf8");
 fs.writeFileSync(contractPath, backupFile);

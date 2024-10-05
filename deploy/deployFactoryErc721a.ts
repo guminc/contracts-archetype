@@ -3,11 +3,13 @@ import { ethers, upgrades, run } from "hardhat";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-  const ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
+  const ArchetypeLogic = await ethers.getContractFactory(
+    "ArchetypeLogicErc721a"
+  );
   const archetypeLogic = await ArchetypeLogic.deploy();
   const archetypeLogicAddress = await archetypeLogic.getAddress();
 
-  const Archetype = await ethers.getContractFactory("Archetype", {
+  const Archetype = await ethers.getContractFactory("ArchetypeErc721a", {
     libraries: {
       ArchetypeLogic: archetypeLogic.address,
     },
@@ -19,7 +21,7 @@ async function main() {
   console.log("Archetype Logic deployed to:", archetypeLogicAddress);
   console.log("Archetype deployed to:", archetypeAddress);
 
-  const Factory = await ethers.getContractFactory("Factory");
+  const Factory = await ethers.getContractFactory("FactoryErc721a");
 
   const factory = await Factory.deploy(archetypeAddress);
 
