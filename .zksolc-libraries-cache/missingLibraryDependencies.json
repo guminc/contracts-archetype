@@ -1,7 +1,17 @@
 [
-    {
-        "contractName": "ArchetypeLogic",
-        "contractPath": "contracts/ERC721a/ArchetypeLogic.sol",
-        "missingLibraries": []
-    }
+  {
+    "contractName": "ArchetypeLogicBrg404",
+    "contractPath": "contracts/BRG404/ArchetypeLogicBrg404.sol",
+    "missingLibraries": []
+  },
+  {
+    "contractName": "ArchetypeLogicErc1155Random",
+    "contractPath": "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol",
+    "missingLibraries": []
+  },
+  {
+    "contractName": "ArchetypeLogicErc721a",
+    "contractPath": "contracts/ERC721a/ArchetypeLogicErc721a.sol",
+    "missingLibraries": []
+  }
 ]

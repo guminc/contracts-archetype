@@ -6,6 +6,7 @@ import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@matterlabs/hardhat-zksync";
 import "@matterlabs/hardhat-zksync-deploy";
+require("hardhat-contract-sizer");
 
 dotenv.config();
 
@@ -33,6 +34,8 @@ const config: HardhatUserConfig = {
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
+      verifyURL:
+        "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
       chainId: 11124,
       ethNetwork: "sepolia",
       zksync: true,
@@ -44,8 +47,15 @@ const config: HardhatUserConfig = {
       // find all available options in the official documentation
       // https://docs.zksync.io/build/tooling/hardhat/hardhat-zksync-solc#configuration
       libraries: {
-        "contracts/ERC721a/ArchetypeLogic.sol": {
-          ArchetypeLogic: "0x4eeEFbb90Fd344940D1CabD7306165D47810591D",
+        "contracts/ERC721a/ArchetypeLogicErc721a.sol": {
+          ArchetypeLogicErc721a: "0x0000000000000000000000000000000000000000", // update
+        },
+        "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol": {
+          ArchetypeLogicErc1155Random:
+            "0x0000000000000000000000000000000000000000", // update
+        },
+        "contracts/BRG404/ArchetypeLogicBrg404.sol": {
+          ArchetypeLogicBrg404: "0x0000000000000000000000000000000000000000", // update
         },
       },
     },

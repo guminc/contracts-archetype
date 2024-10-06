@@ -114,3 +114,4 @@ dist
 
 # More ignores
 typechain-types
+deployments-zk
