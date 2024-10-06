@@ -131,7 +131,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       quantity += quantityToAdd;
 
       bytes memory _data;
-      _mintNext(toList[i], quantityToAdd * _unit(), _data);
+      _mintNext(toList[i], quantityToAdd * ERC20_UNIT, _data);
 
       unchecked {
         ++i;
@@ -144,7 +144,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
         owner: owner(),
         affiliate: affiliate,
         quantity: quantity,
-        curSupply: numMinted(),
+        curSupply: numErc20Minted(),
         listSupply: _listSupply[auth.key]
       });
     }
@@ -202,7 +202,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
         owner: owner(),
         affiliate: affiliate,
         quantity: quantity,
-        curSupply: numMinted(),
+        curSupply: numErc20Minted(),
         listSupply: _listSupply[auth.key]
       });
     }
@@ -220,7 +220,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     ArchetypeLogicBrg404.validateMint(i, config, auth, _minted, signature, args, cost);
 
     bytes memory _data;
-    _mintNext(to, quantity * _unit(), _data);
+    _mintNext(to, quantity * ERC20_UNIT, _data);
 
     if (i.limit < i.maxSupply) {
       _minted[_msgSender()][auth.key] += quantity;
@@ -305,7 +305,11 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     return _listSupply[key];
   }
 
-  function numMinted() public view returns (uint256) {
+  function numErc20Minted() public view returns (uint256) {
+    return totalSupply() / ERC20_UNIT;
+  }
+
+  function numNftsMinted() public view returns (uint256) {
     return totalSupply() / _unit();
   }
 
@@ -345,12 +349,12 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   // max supply cannot subceed total supply. Be careful changing.
-  function setMaxSupply(uint32 maxSupply) external _onlyOwner {
+  function setMaxSupply(uint128 maxSupply) external _onlyOwner {
     if (options.maxSupplyLocked) {
       revert LockedForever();
     }
 
-    if (maxSupply < numMinted()) {
+    if (maxSupply < numErc20Minted()) {
       revert MaxSupplyExceeded();
     }
 
@@ -466,7 +470,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   //
 
   function _unit() internal view override returns (uint256) {
-    return (10 ** 18) * uint256(config.erc20Ratio);
+    return ERC20_UNIT * uint256(config.erc20Ratio);
   }
 
   function _msgSender() internal view override returns (address) {

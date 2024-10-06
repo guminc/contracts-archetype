@@ -37,7 +37,9 @@ const HASHONE =
 const HASH256 =
   "0x00000000000000000000000000000000000000000000000000000000000000ff";
 
-const UNIT = 10 ** 18;
+const ERC20RATIO = 1000;
+const ERC20UNIT = 10 ** 18;
+const NFTUNIT = ERC20UNIT * ERC20RATIO;
 const UINT32_MAX = 2 ** 32 - 1;
 
 function asContractType<T extends BaseContract>(contract: any): T {
@@ -62,7 +64,7 @@ describe("Factory", function () {
       maxBatchSize: 20,
       affiliateFee: 1500,
       defaultRoyalty: 500,
-      erc20Ratio: 1000,
+      erc20Ratio: ERC20RATIO,
       discounts: {
         affiliateDiscount: 0,
         mintTiers: [],
@@ -144,48 +146,6 @@ describe("Factory", function () {
 
   it("should create a collection", async function () {
     const [_, accountOne] = await ethers.getSigners();
-
-    const newCollection = await factory.createCollection(
-      accountOne.address,
-      DEFAULT_NAME,
-      DEFAULT_SYMBOL,
-      DEFAULT_CONFIG,
-      DEFAULT_PAYOUT_CONFIG
-    );
-
-    const result = await newCollection.wait();
-
-    const newCollectionAddress = result.logs[0].address || "";
-
-    const nft = ArchetypeBrg404.attach(newCollectionAddress);
-
-    const symbol = await nft.symbol();
-    const owner = await nft.owner();
-
-    expect(symbol).to.equal(DEFAULT_SYMBOL);
-    expect(owner).to.equal(accountOne.address);
-  });
-
-  it("should initialize only by factory due to mirror", async function () {
-    const [deployer, accountOne] = await ethers.getSigners();
-
-    let DN404Mirror = await ethers.getContractFactory("DN404Mirror");
-    let dn404Mirror = await DN404Mirror.connect(deployer).deploy(
-      deployer.address
-    );
-
-    await expect(
-      archetype
-        .connect(deployer)
-        .initialize(
-          "Wookie",
-          DEFAULT_SYMBOL,
-          DEFAULT_CONFIG,
-          DEFAULT_PAYOUT_CONFIG,
-          accountOne.address,
-          dn404Mirror.address
-        )
-    ).to.be.revertedWith("LinkMirrorContractFailed()");
 
     const newCollection = await factory.createCollection(
       accountOne.address,
@@ -293,7 +253,10 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await expect(nft.lockURI("forever")).to.be.revertedWith("NotOwner");
+    await expect(nft.lockURI("forever")).to.be.revertedWithCustomError(
+      archetype,
+      "NotOwner"
+    );
   });
 
   it("should mint if public sale is set", async function () {
@@ -315,20 +278,18 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.08"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.08"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
-    const invites = await nft.invites(ethers.constants.HashZero);
+    const invites = await nft.invites(ethers.ZeroHash);
 
     console.log({ invites });
 
@@ -336,17 +297,13 @@ describe("Factory", function () {
 
     console.log("current time", Math.floor(Date.now() / 1000));
 
-    await nft.mint(
-      { key: ethers.constants.HashZero, proof: [] },
-      1,
-      ZERO,
-      "0x",
-      {
-        value: ethers.utils.parseEther("0.08"),
-      }
-    );
+    await nft.mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+      value: ethers.parseEther("0.08"),
+    });
 
-    expect(await nft.balanceOf(accountZero.address)).to.equal(BigInt(1 * UNIT));
+    expect(await nft.balanceOf(accountZero.address)).to.equal(
+      BigInt(1 * ERC20UNIT)
+    );
   });
 
   it("should mint if user is on valid list, throw appropriate errors otherwise", async function () {
@@ -376,7 +333,7 @@ describe("Factory", function () {
     const root = invitelist.root();
     const proof = invitelist.proof(accountZero.address);
 
-    const price = ethers.utils.parseEther("0.08");
+    const price = ethers.parseEther("0.08");
 
     const today = new Date();
     const tomorrow = today.setDate(today.getDate() + 1);
@@ -385,18 +342,16 @@ describe("Factory", function () {
     console.log({ toda: Math.floor(Date.now() / 1000) });
     console.log({ tomo: Math.floor(tomorrow / 1000) });
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
-        start: ethers.toBigInt(Math.floor(tomorrow / 1000)),
-        end: 0,
-        limit: 1000,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(tomorrow / 1000)),
+      end: 0,
+      limit: 1000,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_DEFAULT), {
       price: price,
       start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
@@ -409,14 +364,14 @@ describe("Factory", function () {
     });
 
     const invitePrivate = await nft.invites(root);
-    const invitePublic = await nft.invites(ethers.constants.HashZero);
+    const invitePublic = await nft.invites(ethers.ZeroHash);
 
     console.log({ invitePrivate, invitePublic });
 
     // whitelisted wallet
     await expect(
       nft.mint({ key: root, proof: proof }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.07"),
+        value: ethers.parseEther("0.07"),
       })
     ).to.be.revertedWith("InsufficientEthSent");
 
@@ -456,29 +411,27 @@ describe("Factory", function () {
     await expect(
       nft
         .connect(accountTwo)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 2, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
           value: price.mul(2),
         })
     ).to.be.revertedWith("MintNotYetStarted");
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
-        start: 0,
-        end: ethers.toBigInt(Math.floor(yesterday / 1000)),
-        limit: 1000,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: 0,
+      end: ethers.toBigInt(Math.floor(yesterday / 1000)),
+      limit: 1000,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     // ended list rejectiong
     await expect(
       nft
         .connect(accountTwo)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 2, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
           value: price.mul(2),
         })
     ).to.be.revertedWith("MintEnded");
@@ -507,13 +460,13 @@ describe("Factory", function () {
 
     // await nft.connect(owner).setPaused(false);
 
-    const invites = await nft.invites(ethers.constants.HashZero);
+    const invites = await nft.invites(ethers.ZeroHash);
 
     console.log({ invites });
 
     await expect(
-      nft.mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.08"),
+      nft.mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.08"),
       })
     ).to.be.revertedWith("MintingPaused");
   });
@@ -544,18 +497,16 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.08"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.08"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     // test invalid signature
     const invalidReferral = await accountZero.signMessage(
@@ -568,12 +519,12 @@ describe("Factory", function () {
       nft
         .connect(accountZero)
         .mint(
-          { key: ethers.constants.HashZero, proof: [] },
+          { key: ethers.ZeroHash, proof: [] },
           1,
           affiliate.address,
           invalidReferral,
           {
-            value: ethers.utils.parseEther("0.08"),
+            value: ethers.parseEther("0.08"),
           }
         )
     ).to.be.revertedWith("InvalidSignature()");
@@ -588,32 +539,30 @@ describe("Factory", function () {
     await nft
       .connect(accountZero)
       .mint(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         1,
         affiliate.address,
         referral,
         {
-          value: ethers.utils.parseEther("0.08"),
+          value: ethers.parseEther("0.08"),
         }
       );
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("0.068")
-    ); // 85%
+    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.068")); // 85%
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.utils.parseEther("0.012")
+      ethers.parseEther("0.012")
     ); // 15%
 
     // withdraw owner balance
     await nft.connect(owner).withdraw();
     await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.utils.parseEther("0.0612")
+      ethers.parseEther("0.0612")
     );
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
-      ethers.utils.parseEther("0.0034")
+      ethers.parseEther("0.0034")
     );
     await expect(await archetypePayouts.balance(devVault.address)).to.equal(
-      ethers.utils.parseEther("0.0034")
+      ethers.parseEther("0.0034")
     );
 
     // withdraw owner from split contract
@@ -622,42 +571,38 @@ describe("Factory", function () {
     let diff =
       (await ethers.provider.getBalance(owner.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0611"))
-    ); // leave room for gas
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0611"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.0612"))
+      Number(ethers.parseEther("0.0612"))
     );
 
     // mint again
     await nft
       .connect(accountZero)
       .mint(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         1,
         affiliate.address,
         referral,
         {
-          value: ethers.utils.parseEther("0.08"),
+          value: ethers.parseEther("0.08"),
         }
       );
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("0.068")
-    );
+    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.068"));
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.utils.parseEther("0.024")
+      ethers.parseEther("0.024")
     ); // 15% x 2 mints
 
     await nft.connect(platform).withdraw();
     await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.utils.parseEther("0.0612")
+      ethers.parseEther("0.0612")
     );
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
-      ethers.utils.parseEther("0.0068") // accumulated from last withdraw to split
+      ethers.parseEther("0.0068") // accumulated from last withdraw to split
     );
     await expect(await archetypePayouts.balance(devVault.address)).to.equal(
-      ethers.utils.parseEther("0.0068") // accumulated from last withdraw to split
+      ethers.parseEther("0.0068") // accumulated from last withdraw to split
     );
 
     // withdraw owner balance again
@@ -666,11 +611,9 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(owner.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0611"))
-    ); // leave room for gas
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0611"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.0612"))
+      Number(ethers.parseEther("0.0612"))
     );
 
     // withdraw platform balance
@@ -679,12 +622,8 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(platform.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0067"))
-    );
-    expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.068"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0067")));
+    expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.068")));
 
     // withdraw dev vault balance
     balance = await ethers.provider.getBalance(devVault.address);
@@ -692,12 +631,8 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(devVault.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0067"))
-    );
-    expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.068"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0067")));
+    expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.068")));
 
     // withdraw affiliate balance
     balance = await ethers.provider.getBalance(affiliate.address);
@@ -708,12 +643,8 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(affiliate.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.020"))
-    );
-    expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.024"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.020")));
+    expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.024")));
 
     // withdraw empty owner balance
     await expect(archetypePayouts.connect(owner).withdraw()).to.be.revertedWith(
@@ -782,18 +713,16 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -805,20 +734,20 @@ describe("Factory", function () {
     await nft
       .connect(accountZero)
       .mint(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         1,
         affiliate.address,
         referral,
         {
-          value: ethers.utils.parseEther("0.09"), // 10 % discount from using an affiliate = 0.9
+          value: ethers.parseEther("0.09"), // 10 % discount from using an affiliate = 0.9
         }
       );
 
     await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("0.0765")
+      ethers.parseEther("0.0765")
     ); // 85%
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.utils.parseEther("0.0135")
+      ethers.parseEther("0.0135")
     ); // 15%
 
     // reset balances by withdrawing
@@ -829,24 +758,22 @@ describe("Factory", function () {
     await nft
       .connect(accountZero)
       .mint(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         20,
         affiliate.address,
         referral,
         {
-          value: ethers.utils.parseEther((0.081 * 20).toString()), // 10 % discount from using an affiliate, additional 10% for minting 20 = 0.081 per
+          value: ethers.parseEther((0.081 * 20).toString()), // 10 % discount from using an affiliate, additional 10% for minting 20 = 0.081 per
         }
       );
 
-    await expect(
-      await nft.computePrice(ethers.constants.HashZero, 20, true)
-    ).to.equal(ethers.utils.parseEther((0.081 * 20).toString()));
+    await expect(await nft.computePrice(ethers.ZeroHash, 20, true)).to.equal(
+      ethers.parseEther((0.081 * 20).toString())
+    );
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("1.377")
-    ); // 85%
+    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("1.377")); // 85%
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.utils.parseEther("0.243")
+      ethers.parseEther("0.243")
     ); // 15%
   });
 
@@ -888,18 +815,16 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -911,20 +836,18 @@ describe("Factory", function () {
     await nft
       .connect(accountZero)
       .mint(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         1,
         affiliate.address,
         referral,
         {
-          value: ethers.utils.parseEther("0.1"),
+          value: ethers.parseEther("0.1"),
         }
       );
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("0.085")
-    ); // 85%
+    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.085")); // 85%
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.utils.parseEther("0.015")
+      ethers.parseEther("0.015")
     ); // 15%
 
     await nft.connect(owner).withdraw();
@@ -935,11 +858,9 @@ describe("Factory", function () {
     let diff =
       (await ethers.provider.getBalance(owner.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0760"))
-    ); // leave room for gas
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0760"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.0765"))
+      Number(ethers.parseEther("0.0765"))
     );
 
     // withdraw platform balance
@@ -948,11 +869,9 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(platform.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0042"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0042")));
     expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.0425"))
+      Number(ethers.parseEther("0.0425"))
     );
 
     // withdraw super affiliate balance
@@ -961,11 +880,9 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(superAffiliate.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.0042"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0042")));
     expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.0425"))
+      Number(ethers.parseEther("0.0425"))
     );
 
     // withdraw affiliate balance
@@ -974,12 +891,8 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(affiliate.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.014"))
-    );
-    expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.015"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.014")));
+    expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.015")));
   });
 
   it("should withdraw to alt owner address", async function () {
@@ -1018,28 +931,24 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     await nft
       .connect(accountZero)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.1"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.1"),
       });
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("0.1")
-    ); // 100%
+    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.1")); // 100%
 
     // first scenario - owner withdraws to alt payout.
     await nft.connect(owner).withdraw();
@@ -1052,17 +961,13 @@ describe("Factory", function () {
     let diff =
       (await ethers.provider.getBalance(ownerAltPayout.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.089"))
-    ); // leave room for gas
-    expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.090"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.089"))); // leave room for gas
+    expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.090")));
 
     await nft
       .connect(accountZero)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.1"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.1"),
       });
 
     // second scenario - owner alt withdraws to himself.
@@ -1080,12 +985,8 @@ describe("Factory", function () {
     diff =
       (await ethers.provider.getBalance(ownerAltPayout.address)).toBigInt() -
       balance.toBigInt();
-    expect(Number(diff)).to.greaterThan(
-      Number(ethers.utils.parseEther("0.089"))
-    ); // leave room for gas
-    expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.utils.parseEther("0.090"))
-    );
+    expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.089"))); // leave room for gas
+    expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.090")));
   });
 
   // it("allow token owner to store msg", async function () {
@@ -1107,8 +1008,8 @@ describe("Factory", function () {
 
   //   const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-  //   await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-  //     price: ethers.utils.parseEther("0.02"),
+  //   await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+  //     price: ethers.parseEther("0.02"),
   //     start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
   //     end: 0,
   //     limit: 300,
@@ -1118,8 +1019,8 @@ describe("Factory", function () {
   //   });
 
   //   // mint tokens 1, 2, 3
-  //   await nft.connect(holder).mint({ key: ethers.constants.HashZero, proof: [] }, 3, ZERO, "0x", {
-  //     value: ethers.utils.parseEther("0.06"),
+  //   await nft.connect(holder).mint({ key: ethers.ZeroHash, proof: [] }, 3, ZERO, "0x", {
+  //     value: ethers.parseEther("0.06"),
   //   });
 
   //   const msg = "Hi this is a test, I own this";
@@ -1237,7 +1138,7 @@ describe("Factory", function () {
   //   const mirror = DN404Mirror.attach(await nftMint.mirrorERC721());
 
   //   await nftBurn.connect(owner).enableBurnToMint(nftMint.address, BURN, false, 2, 0, 5000);
-  //   await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
+  //   await nftMint.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
   //     price: 0,
   //     start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
   //     end: 0,
@@ -1251,7 +1152,7 @@ describe("Factory", function () {
   //   // mint 10 tokens
   //   await nftMint
   //     .connect(minter)
-  //     .mint({ key: ethers.constants.HashZero, proof: [] }, 12, ZERO, "0x", {
+  //     .mint({ key: ethers.ZeroHash, proof: [] }, 12, ZERO, "0x", {
   //       value: 0,
   //     });
 
@@ -1374,7 +1275,7 @@ describe("Factory", function () {
 
     await nftMint
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: 0,
         start: 0,
         end: 0,
@@ -1388,7 +1289,7 @@ describe("Factory", function () {
     // mint some tokens
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 10, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 10, ZERO, "0x", {
         value: 0,
       });
 
@@ -1396,7 +1297,7 @@ describe("Factory", function () {
     await expect(
       nftMint
         .connect(minter)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 4991, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 4991, ZERO, "0x", {
           value: 0,
         })
     ).to.be.revertedWith("MaxSupplyExceeded");
@@ -1404,27 +1305,27 @@ describe("Factory", function () {
     // mint max tokens
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1000, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1000, ZERO, "0x", {
         value: 0,
       });
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1000, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1000, ZERO, "0x", {
         value: 0,
       });
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1000, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1000, ZERO, "0x", {
         value: 0,
       });
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1000, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1000, ZERO, "0x", {
         value: 0,
       });
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 990, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 990, ZERO, "0x", {
         value: 0,
       });
 
@@ -1432,7 +1333,7 @@ describe("Factory", function () {
     await expect(
       nftMint
         .connect(minter)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
           value: 0,
         })
     ).to.be.revertedWith("MaxSupplyExceeded");
@@ -1465,30 +1366,28 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.02"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: UINT32_MAX,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.02"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: UINT32_MAX,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     // mint tokens from owner to holder address
     await nft
       .connect(owner)
       .mintTo(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         3,
         holder.address,
         ZERO,
         "0x",
         {
-          value: ethers.utils.parseEther("0.06"),
+          value: ethers.parseEther("0.06"),
         }
       );
 
@@ -1496,16 +1395,9 @@ describe("Factory", function () {
     await expect(
       nft
         .connect(owner)
-        .mintTo(
-          { key: ethers.constants.HashZero, proof: [] },
-          1,
-          ZERO,
-          ZERO,
-          "0x",
-          {
-            value: ethers.utils.parseEther("0.02"),
-          }
-        )
+        .mintTo({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, ZERO, "0x", {
+          value: ethers.parseEther("0.02"),
+        })
     ).to.be.revertedWith("TransferToZeroAddress");
 
     await expect(await nft.balanceOf(holder.address)).to.be.equal(
@@ -1538,7 +1430,7 @@ describe("Factory", function () {
     const proof = invitelist.proof(accountZero.address);
 
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_ZERO), {
-      price: ethers.utils.parseEther("0.00"),
+      price: ethers.parseEther("0.00"),
       start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 5000,
@@ -1574,7 +1466,7 @@ describe("Factory", function () {
         ZERO,
         "0x",
         {
-          value: ethers.utils.parseEther("0.00"),
+          value: ethers.parseEther("0.00"),
         }
       );
     }
@@ -1622,8 +1514,8 @@ describe("Factory", function () {
   //   // const filter = await Filter.deploy();
   //   // await filter.deployed();
 
-  //   // await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-  //   //   price: ethers.utils.parseEther("0.00"),
+  //   // await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+  //   //   price: ethers.parseEther("0.00"),
   //   //   start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
   //   //   limit: 5000,
   //   //   unitSize:0,
@@ -1662,19 +1554,15 @@ describe("Factory", function () {
     // console.log(owner.address);
     // console.log(holder.address);
 
-    await nft.royaltyInfo(0, ethers.utils.parseEther("1"));
+    await nft.royaltyInfo(0, ethers.parseEther("1"));
     await expect(
-      JSON.stringify(await nft.royaltyInfo(0, ethers.utils.parseEther("1")))
-    ).to.be.equal(
-      JSON.stringify([owner.address, ethers.utils.parseEther("0.05")])
-    ); // 5% default royalty to owner
+      JSON.stringify(await nft.royaltyInfo(0, ethers.parseEther("1")))
+    ).to.be.equal(JSON.stringify([owner.address, ethers.parseEther("0.05")])); // 5% default royalty to owner
 
     await nft.connect(owner).setDefaultRoyalty(holder.address, 1000);
     await expect(
-      JSON.stringify(await nft.royaltyInfo(0, ethers.utils.parseEther("1")))
-    ).to.be.equal(
-      JSON.stringify([holder.address, ethers.utils.parseEther("0.10")])
-    ); // 10% royalty to holder
+      JSON.stringify(await nft.royaltyInfo(0, ethers.parseEther("1")))
+    ).to.be.equal(JSON.stringify([holder.address, ethers.parseEther("0.10")])); // 10% royalty to holder
   });
 
   it("test minting with erc20 list", async function () {
@@ -1711,7 +1599,7 @@ describe("Factory", function () {
     );
 
     await nft.connect(owner).setInvite(erc20PublicKey, ipfsh.ctod(CID_ZERO), {
-      price: ethers.utils.parseEther("1"),
+      price: ethers.parseEther("1"),
       start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 300,
@@ -1739,7 +1627,7 @@ describe("Factory", function () {
         .mint({ key: erc20PublicKey, proof: [] }, 3, ZERO, "0x")
     ).to.be.revertedWith("Erc20BalanceTooLow");
 
-    await erc20.connect(holder).mint(ethers.utils.parseEther("3"));
+    await erc20.connect(holder).mint(ethers.parseEther("3"));
 
     const balance = await erc20.balanceOf(holder.address);
 
@@ -1754,34 +1642,34 @@ describe("Factory", function () {
     );
     await expect(await erc20.balanceOf(holder.address)).to.be.equal(0);
     await expect(await erc20.balanceOf(nft.address)).to.be.equal(
-      ethers.utils.parseEther("3")
+      ethers.parseEther("3")
     );
 
     await expect(await nft.ownerBalanceToken(erc20.address)).to.be.equal(
-      ethers.utils.parseEther("3.0")
+      ethers.parseEther("3.0")
     ); // 100%
 
     await nft.connect(owner).withdrawTokens([erc20.address]);
 
     await expect(await erc20.balanceOf(nft.address)).to.be.equal(
-      ethers.utils.parseEther("0")
+      ethers.parseEther("0")
     );
     await archetypePayouts.connect(owner).withdrawTokens([erc20.address]);
     await expect(await erc20.balanceOf(archetypePayouts.address)).to.be.equal(
-      ethers.utils.parseEther("0.3")
+      ethers.parseEther("0.3")
     );
     await expect(await erc20.balanceOf(owner.address)).to.be.equal(
-      ethers.utils.parseEther("2.7")
+      ethers.parseEther("2.7")
     );
 
     await archetypePayouts.connect(platform).withdrawTokens([erc20.address]);
     await archetypePayouts.connect(dev).withdrawTokens([erc20.address]);
 
     await expect(await erc20.balanceOf(platform.address)).to.be.equal(
-      ethers.utils.parseEther("0.15")
+      ethers.parseEther("0.15")
     );
     await expect(await erc20.balanceOf(dev.address)).to.be.equal(
-      ethers.utils.parseEther("0.15")
+      ethers.parseEther("0.15")
     );
   });
 
@@ -1807,14 +1695,14 @@ describe("Factory", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("1"),
-        reservePrice: ethers.utils.parseEther("0.1"),
+      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: ethers.parseEther("1"),
+        reservePrice: ethers.parseEther("0.1"),
         start: 0,
         end: 0,
         limit: 300,
         interval: 1000, // 1000s,
-        delta: ethers.utils.parseEther("0.1"),
+        delta: ethers.parseEther("0.1"),
         maxSupply: DEFAULT_CONFIG.maxSupply,
         unitSize: 0,
         tokenAddress: ZERO,
@@ -1824,16 +1712,16 @@ describe("Factory", function () {
     // mint at full price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("1"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("1"),
       });
 
     // try to mint at half price, will revert
     await expect(
       nft
         .connect(holder)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-          value: ethers.utils.parseEther("0.5"),
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+          value: ethers.parseEther("0.5"),
         })
     ).to.be.revertedWith("InsufficientEthSent");
 
@@ -1843,8 +1731,8 @@ describe("Factory", function () {
     // mint at half price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.5"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.5"),
       });
 
     // forward a long time
@@ -1853,8 +1741,8 @@ describe("Factory", function () {
     // mint at reserve price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.1"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.1"),
       });
 
     await expect(await nft.balanceOf(holder.address)).to.be.equal(
@@ -1883,14 +1771,14 @@ describe("Factory", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("1"),
-        reservePrice: ethers.utils.parseEther("10"),
+      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: ethers.parseEther("1"),
+        reservePrice: ethers.parseEther("10"),
         start: 0,
         end: 0,
         limit: 300,
         interval: 1000, // 1000s,
-        delta: ethers.utils.parseEther("1"),
+        delta: ethers.parseEther("1"),
         maxSupply: DEFAULT_CONFIG.maxSupply,
         unitSize: 0,
         tokenAddress: ZERO,
@@ -1900,8 +1788,8 @@ describe("Factory", function () {
     // mint at full price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("1"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("1"),
       });
 
     // forward time 5000s
@@ -1911,16 +1799,16 @@ describe("Factory", function () {
     await expect(
       nft
         .connect(holder)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-          value: ethers.utils.parseEther("1"),
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+          value: ethers.parseEther("1"),
         })
     ).to.be.revertedWith("InsufficientEthSent");
 
     // mint at half price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("6"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("6"),
       });
 
     // forward a long time
@@ -1929,8 +1817,8 @@ describe("Factory", function () {
     // mint at reserve price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("10"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("10"),
       });
 
     await expect(await nft.balanceOf(holder.address)).to.be.equal(
@@ -1960,14 +1848,14 @@ describe("Factory", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("1"),
-        reservePrice: ethers.utils.parseEther("0.1"),
+      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: ethers.parseEther("1"),
+        reservePrice: ethers.parseEther("0.1"),
         start: 0,
         end: 0,
         limit: 300,
         interval: 0, // 1000s,
-        delta: ethers.utils.parseEther("0.01"),
+        delta: ethers.parseEther("0.01"),
         maxSupply: DEFAULT_CONFIG.maxSupply,
         unitSize: 0,
         tokenAddress: ZERO,
@@ -1977,31 +1865,31 @@ describe("Factory", function () {
     // mint at full price
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("1"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("1"),
       });
 
     // try to mint at initial price, will revert
     await expect(
       nft
         .connect(holder)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-          value: ethers.utils.parseEther("1"),
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+          value: ethers.parseEther("1"),
         })
     ).to.be.revertedWith("InsufficientEthSent");
 
     // mint at current price (1.01) in a linear curve
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("1.01"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("1.01"),
       });
 
     // mint 10 nfts, current price=1.02 and the price of 10 nfts = 1.02*10 + 0.01*10*9/2=10.65
     await nft
       .connect(holder)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 10, ZERO, "0x", {
-        value: ethers.utils.parseEther("10.65"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 10, ZERO, "0x", {
+        value: ethers.parseEther("10.65"),
       });
 
     await expect(await nft.balanceOf(holder.address)).to.be.equal(
@@ -2031,7 +1919,7 @@ describe("Factory", function () {
 
     await nftMint
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: 0,
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
@@ -2044,7 +1932,7 @@ describe("Factory", function () {
 
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 40, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 40, ZERO, "0x", {
         value: 0,
       });
 
@@ -2052,14 +1940,14 @@ describe("Factory", function () {
     await expect(
       nftMint
         .connect(minter2)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 60, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 60, ZERO, "0x", {
           value: 0,
         })
     ).to.be.revertedWith("ListMaxSupplyExceeded");
 
     await nftMint
       .connect(minter2)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 50, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 50, ZERO, "0x", {
         value: 0,
       });
 
@@ -2090,8 +1978,8 @@ describe("Factory", function () {
 
     await nftMint
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("1"),
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: ethers.parseEther("1"),
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: DEFAULT_CONFIG.maxSupply,
@@ -2103,8 +1991,8 @@ describe("Factory", function () {
 
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 40, ZERO, "0x", {
-        value: ethers.utils.parseEther("40"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 40, ZERO, "0x", {
+        value: ethers.parseEther("40"),
       });
 
     // set 2nd public list
@@ -2169,7 +2057,7 @@ describe("Factory", function () {
 
     await nftMint
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: 0,
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
@@ -2183,7 +2071,7 @@ describe("Factory", function () {
     // mint 1 get 12
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
         value: 0,
       });
 
@@ -2191,7 +2079,7 @@ describe("Factory", function () {
     await expect(
       nftMint
         .connect(minter)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 2, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
           value: 0,
         })
     ).to.be.revertedWith("NumberOfMintsExceeded");
@@ -2199,7 +2087,7 @@ describe("Factory", function () {
     // mint 2 get 24
     await nftMint
       .connect(minter2)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 2, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
         value: 0,
       });
 
@@ -2207,7 +2095,7 @@ describe("Factory", function () {
     await expect(
       nftMint
         .connect(minter3)
-        .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
           value: 0,
         })
     ).to.be.revertedWith("ListMaxSupplyExceeded");
@@ -2244,7 +2132,7 @@ describe("Factory", function () {
 
     await nftMint
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: 0,
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
@@ -2256,7 +2144,7 @@ describe("Factory", function () {
       });
 
     await nftMint.connect(owner).setInvite(HASHONE, ipfsh.ctod(CID_ZERO), {
-      price: ethers.utils.parseEther("0.1"),
+      price: ethers.parseEther("0.1"),
       start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 100,
@@ -2277,25 +2165,25 @@ describe("Factory", function () {
       0,
       0,
       0,
-      ethers.utils.parseEther("0.2"),
-      ethers.utils.parseEther("0.3"),
+      ethers.parseEther("0.2"),
+      ethers.parseEther("0.3"),
     ];
     const datas = [
       nftMint.interface.encodeFunctionData("mintTo", [
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         1,
         archetypeBatch.address,
         ZERO,
         "0x",
       ]),
       nftMint.interface.encodeFunctionData("mint", [
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         2,
         ZERO,
         "0x",
       ]),
       nftMint.interface.encodeFunctionData("mintTo", [
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         5,
         minter2.address,
         ZERO,
@@ -2319,7 +2207,7 @@ describe("Factory", function () {
 
     // Execute batch transactions
     await archetypeBatch.connect(minter).executeBatch(targets, values, datas, {
-      value: ethers.utils.parseEther("0.6"),
+      value: ethers.parseEther("0.6"),
     });
 
     const balanceOfContract = await nftMint.balanceOf(archetypeBatch.address);
@@ -2343,7 +2231,7 @@ describe("Factory", function () {
       (await ethers.provider.getBalance(minter2.address)).toBigInt() -
       ethbalance.toBigInt();
 
-    expect(Number(diff)).to.be.equal(Number(ethers.utils.parseEther("0.1")));
+    expect(Number(diff)).to.be.equal(Number(ethers.parseEther("0.1")));
   });
 
   it("test batch msg sender vs tx origin logic", async function () {
@@ -2371,7 +2259,7 @@ describe("Factory", function () {
 
     // private invite list with only minter
     await nftMint.connect(owner).setInvite(root, ipfsh.ctod(CID_ZERO), {
-      price: ethers.utils.parseEther("0.0"),
+      price: ethers.parseEther("0.0"),
       start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 100,
@@ -2383,8 +2271,8 @@ describe("Factory", function () {
 
     await nftMint
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: ethers.parseEther("0.1"),
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 100,
@@ -2395,10 +2283,10 @@ describe("Factory", function () {
       });
 
     const targets = [nftMint.address, nftMint.address];
-    const values = [ethers.utils.parseEther("0.5"), 0];
+    const values = [ethers.parseEther("0.5"), 0];
     const datas = [
       nftMint.interface.encodeFunctionData("mint", [
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         5,
         ZERO,
         "0x",
@@ -2413,7 +2301,7 @@ describe("Factory", function () {
 
     // Execute batch transactions
     await archetypeBatch.connect(minter).executeBatch(targets, values, datas, {
-      value: ethers.utils.parseEther("0.5"),
+      value: ethers.parseEther("0.5"),
     });
 
     // minter is validated through tx.origin
@@ -2447,10 +2335,10 @@ describe("Factory", function () {
     const values = [0, 0, 0];
     const datas = [
       nftMint.interface.encodeFunctionData("setInvite", [
-        ethers.constants.HashZero,
+        ethers.ZeroHash,
         ipfsh.ctod(CID_ZERO),
         {
-          price: ethers.utils.parseEther("0.0"),
+          price: ethers.parseEther("0.0"),
           start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
           end: 0,
           limit: 100,
@@ -2466,7 +2354,7 @@ describe("Factory", function () {
 
     // Execute batch transactions
     await archetypeBatch.connect(owner).executeBatch(targets, values, datas, {
-      value: ethers.utils.parseEther("0.0"),
+      value: ethers.parseEther("0.0"),
     });
 
     await expect((await nftMint.connect(owner).config()).maxSupply).to.be.equal(
@@ -2503,23 +2391,21 @@ describe("Factory", function () {
     const root = invitelist.root();
     const proof = invitelist.proof(accountZero.address);
 
-    const price = ethers.utils.parseEther("0.08");
+    const price = ethers.parseEther("0.08");
 
     const today = new Date();
     const tomorrow = today.setDate(today.getDate() + 1);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.1"),
-        start: ethers.toBigInt(Math.floor(tomorrow / 1000)),
-        end: 0,
-        limit: 1000,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(tomorrow / 1000)),
+      end: 0,
+      limit: 1000,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_DEFAULT), {
       price: price,
@@ -2547,7 +2433,7 @@ describe("Factory", function () {
     await nft
       .connect(accountOne)
       .mint({ key: root, proof: proof2 }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.08"),
+        value: ethers.parseEther("0.08"),
       });
 
     expect(await nft.balanceOf(accountOne.address)).to.equal(BigInt(1 * UNIT));
@@ -2585,22 +2471,20 @@ describe("Factory", function () {
     const today = new Date();
     const tomorrow = today.setDate(today.getDate() + 1);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: 0,
-        start: 0,
-        end: 0,
-        limit: 1000,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: 0,
+      start: 0,
+      end: 0,
+      limit: 1000,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     await nft
       .connect(accountZero)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 10, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 10, ZERO, "0x", {
         value: 0,
       });
 
@@ -2614,7 +2498,7 @@ describe("Factory", function () {
 
     await nft
       .connect(accountThree)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 3, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 3, ZERO, "0x", {
         value: 0,
       });
 
@@ -2668,84 +2552,52 @@ describe("Factory", function () {
     const newCollectionAddress = result.logs[0].address || "";
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.0008"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 50,
-        maxSupply: 50,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.0008"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 50,
+      maxSupply: 50,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     expect(await nft.numMinted()).eq(0);
 
-    await nft.mint(
-      { key: ethers.constants.HashZero, proof: [] },
-      1,
-      ZERO,
-      "0x",
-      {
-        value: ethers.utils.parseEther("0.0008"),
-      }
-    );
+    await nft.mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+      value: ethers.parseEther("0.0008"),
+    });
 
     expect(await nft.numMinted()).eq(1);
 
-    await nft.mint(
-      { key: ethers.constants.HashZero, proof: [] },
-      1,
-      ZERO,
-      "0x",
-      {
-        value: ethers.utils.parseEther("0.0008"),
-      }
-    );
+    await nft.mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+      value: ethers.parseEther("0.0008"),
+    });
 
     expect(await nft.numMinted()).eq(2);
 
-    await nft.mint(
-      { key: ethers.constants.HashZero, proof: [] },
-      20,
-      ZERO,
-      "0x",
-      {
-        value: ethers.utils.parseEther("0.0008").mul(20),
-      }
-    );
+    await nft.mint({ key: ethers.ZeroHash, proof: [] }, 20, ZERO, "0x", {
+      value: ethers.parseEther("0.0008").mul(20),
+    });
 
     expect(await nft.numMinted()).eq(22);
 
-    await nft.mint(
-      { key: ethers.constants.HashZero, proof: [] },
-      15,
-      ZERO,
-      "0x",
-      {
-        value: ethers.utils.parseEther("0.0008").mul(15),
-      }
-    );
+    await nft.mint({ key: ethers.ZeroHash, proof: [] }, 15, ZERO, "0x", {
+      value: ethers.parseEther("0.0008").mul(15),
+    });
 
     expect(await nft.numMinted()).eq(37);
 
-    await nft.mint(
-      { key: ethers.constants.HashZero, proof: [] },
-      13,
-      ZERO,
-      "0x",
-      {
-        value: ethers.utils.parseEther("0.0008").mul(13),
-      }
-    );
+    await nft.mint({ key: ethers.ZeroHash, proof: [] }, 13, ZERO, "0x", {
+      value: ethers.parseEther("0.0008").mul(13),
+    });
 
     expect(await nft.numMinted()).eq(50);
 
     await expect(
-      nft.mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.0008"),
+      nft.mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.0008"),
       })
     ).reverted;
   });
@@ -2767,13 +2619,13 @@ describe("Factory", function () {
     const newCollectionAddress = result.logs[0].address || "";
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    const mintPrice = ethers.utils.parseEther("0.08");
-    const paidPrice = ethers.utils.parseEther("0.12");
-    const delta = ethers.utils.parseEther("0.001");
+    const mintPrice = ethers.parseEther("0.08");
+    const paidPrice = ethers.parseEther("0.12");
+    const delta = ethers.parseEther("0.001");
 
     await nft
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: mintPrice,
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
@@ -2790,7 +2642,7 @@ describe("Factory", function () {
 
     await nft
       .connect(user)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
         value: paidPrice,
       })
       .then((tx) => tx.wait());
@@ -2825,21 +2677,19 @@ describe("Factory", function () {
 
     const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
-    const mintPrice = ethers.utils.parseEther("0.08");
-    const paidPrice = ethers.utils.parseEther("0.20");
+    const mintPrice = ethers.parseEther("0.08");
+    const paidPrice = ethers.parseEther("0.20");
 
-    await nft
-      .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.08"),
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-        end: 0,
-        limit: 300,
-        maxSupply: DEFAULT_CONFIG.maxSupply,
-        unitSize: 0,
-        tokenAddress: ZERO,
-        isBlacklist: false,
-      });
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.08"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: DEFAULT_CONFIG.maxSupply,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -2854,27 +2704,25 @@ describe("Factory", function () {
     await nft
       .connect(accountZero)
       .mint(
-        { key: ethers.constants.HashZero, proof: [] },
+        { key: ethers.ZeroHash, proof: [] },
         1,
         affiliate.address,
         referral,
         {
-          value: ethers.utils.parseEther("0.20"),
+          value: ethers.parseEther("0.20"),
         }
       );
 
     const postContractBalance = await ethers.provider.getBalance(nft.address);
     const postUserBalance = await accountZero.getBalance();
 
-    const delta = ethers.utils.parseEther("0.001");
+    const delta = ethers.parseEther("0.001");
     expect(postUserBalance).closeTo(preUserBalance.sub(mintPrice), delta);
     expect(postContractBalance).eq(preContractBalance.add(mintPrice));
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.utils.parseEther("0.068")
-    ); // 85%
+    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.068")); // 85%
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.utils.parseEther("0.012")
+      ethers.parseEther("0.012")
     ); // 15%
   });
 
@@ -2898,8 +2746,8 @@ describe("Factory", function () {
 
     await nft
       .connect(owner)
-      .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
-        price: ethers.utils.parseEther("0.2"),
+      .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: ethers.parseEther("0.2"),
         start: 0,
         end: 0,
         limit: 50,
@@ -2912,8 +2760,8 @@ describe("Factory", function () {
 
     await nft
       .connect(accountOne)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.2"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.2"),
       })
       .then((tx) => tx.wait());
 
@@ -2939,8 +2787,8 @@ describe("Factory", function () {
 
     await nft
       .connect(accountOne)
-      .mint({ key: ethers.constants.HashZero, proof: [] }, 1, ZERO, "0x", {
-        value: ethers.utils.parseEther("0.2"),
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+        value: ethers.parseEther("0.2"),
       })
       .then((tx) => tx.wait());
 

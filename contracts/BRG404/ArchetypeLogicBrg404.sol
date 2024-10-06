@@ -66,8 +66,8 @@ struct Discount {
 struct Config {
   string baseUri;
   address affiliateSigner;
-  uint32 maxSupply;
-  uint32 maxBatchSize;
+  uint128 maxSupply; // in erc20
+  uint128 maxBatchSize; // in erc20
   uint16 affiliateFee; //BPS
   uint16 defaultRoyalty; //BPS
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
@@ -92,13 +92,13 @@ struct Options {
 }
 
 struct DutchInvite {
-  uint128 price;
-  uint128 reservePrice;
-  uint128 delta;
+  uint128 price; // in erc20
+  uint128 reservePrice; // in erc20
+  uint128 delta; // in erc20
+  uint128 maxSupply; // in erc20
+  uint128 limit; // in erc20
   uint32 start;
   uint32 end;
-  uint32 limit;
-  uint32 maxSupply;
   uint32 interval;
   uint32 unitSize; // mint 1 get x
   address tokenAddress;
@@ -106,11 +106,11 @@ struct DutchInvite {
 }
 
 struct Invite {
-  uint128 price;
+  uint128 price; 
+  uint128 maxSupply; // in erc20
+  uint128 limit; // in erc20
   uint32 start;
   uint32 end;
-  uint32 limit;
-  uint32 maxSupply;
   uint32 unitSize; // mint 1 get x
   address tokenAddress;
   bool isBlacklist;
@@ -130,6 +130,7 @@ address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
 address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
+uint256 constant ERC20_UNIT = 10 ** 18;
 
 library ArchetypeLogicBrg404 {
   //
