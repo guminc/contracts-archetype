@@ -27,3 +27,15 @@ const erc1155RandomBackupFile = fs.readFileSync(
 );
 fs.writeFileSync(erc1155RandomContractPath, erc1155RandomBackupFile);
 fs.unlinkSync(erc1155RandomBackupFilePath);
+
+const brg404ContractPath = path.resolve(
+  __dirname,
+  "../contracts/BRG404/ArchetypeLogicBrg404.sol"
+);
+const brg404BackupFilePath = path.resolve(
+  __dirname,
+  "../contracts/BRG404/ArchetypeLogicBrg404.sol.bak"
+);
+const brg404BackupFile = fs.readFileSync(brg404BackupFilePath, "utf8");
+fs.writeFileSync(brg404ContractPath, brg404BackupFile);
+fs.unlinkSync(brg404BackupFilePath);

@@ -43,3 +43,14 @@ fs.writeFileSync(
   originalErc1155File
 );
 replaceConstants(erc1155RandomContractPath);
+
+const brg404RandomContractPath = path.resolve(
+  __dirname,
+  "../contracts/BRG404/ArchetypeLogicBrg404.sol"
+);
+const originalBrg404File = fs.readFileSync(brg404RandomContractPath, "utf8");
+fs.writeFileSync(
+  "./contracts/BRG404/ArchetypeLogicBrg404.sol.bak",
+  originalBrg404File
+);
+replaceConstants(brg404RandomContractPath);

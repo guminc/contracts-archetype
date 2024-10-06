@@ -1,28 +1,28 @@
-import { ethers, upgrades } from "hardhat";
+import { ethers } from "hardhat";
 
 import { expect } from "chai";
-import {
-  Archetype__factory,
-  Archetype as IArchetype,
-  ArchetypePayouts as IArchetypePayouts,
-  ArchetypeLogic__factory,
-  ArchetypeBatch__factory,
-  ArchetypePayouts__factory,
-  Factory__factory,
-} from "../typechain";
 import Invitelist from "../lib/invitelist";
-import { IArchetypeConfig, IArchetypePayoutConfig } from "../lib/types";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { IArchetypeBrg404Config, IArchetypePayoutConfig } from "../lib/types";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import ipfsh from "ipfsh";
-import { Contract } from "ethers";
+import {
+  ArchetypeBrg404,
+  ArchetypeBatch,
+  ArchetypeLogicBrg404,
+  ArchetypePayouts,
+  FactoryBrg404,
+  TestErc20,
+} from "../../typechain-types";
+import { BaseContract } from "ethers";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const DEFAULT_NAME = "Pookie";
 const DEFAULT_SYMBOL = "POOKIE";
 let AFFILIATE_SIGNER: SignerWithAddress;
-let DEFAULT_CONFIG: IArchetypeConfig;
+let DEFAULT_CONFIG: IArchetypeBrg404Config;
 let DEFAULT_PAYOUT_CONFIG: IArchetypePayoutConfig;
+
 // this is an IPFS content ID which stores a list of addresses ({address: string[]})
 // eg: https://ipfs.io/ipfs/bafkreih2kyxirba6a6dyzt4tsdqb5iim3soprumtewq6garaohkfknqlaq
 // utility for converting CID to bytes32: https://github.com/factoria-org/ipfsh
@@ -40,17 +40,17 @@ const HASH256 =
 const UNIT = 10 ** 18;
 const UINT32_MAX = 2 ** 32 - 1;
 
+function asContractType<T extends BaseContract>(contract: any): T {
+  return contract as T;
+}
+
 describe("Factory", function () {
-  let Archetype: Archetype__factory;
-  let archetype: IArchetype;
-  let ArchetypeLogic: ArchetypeLogic__factory;
-  let archetypeLogic: Contract;
-  let ArchetypeBatch: ArchetypeBatch__factory;
-  let archetypeBatch: Contract;
-  let ArchetypePayouts: ArchetypePayouts__factory;
-  let archetypePayouts: IArchetypePayouts;
-  let Factory: Factory__factory;
-  let factory: Contract;
+  let ArchetypeBrg404;
+  let archetype: ArchetypeBrg404;
+  let archetypeLogic: ArchetypeLogicBrg404;
+  let archetypeBatch: ArchetypeBatch;
+  let archetypePayouts: ArchetypePayouts;
+  let factory: FactoryBrg404;
 
   before(async function () {
     AFFILIATE_SIGNER = (await ethers.getSigners())[4]; // account[4]
@@ -62,6 +62,7 @@ describe("Factory", function () {
       maxBatchSize: 20,
       affiliateFee: 1500,
       defaultRoyalty: 500,
+      erc20Ratio: 1000,
       discounts: {
         affiliateDiscount: 0,
         mintTiers: [],
@@ -71,56 +72,63 @@ describe("Factory", function () {
         // }];
       },
     };
+    DEFAULT_PAYOUT_CONFIG = {
+      ownerBps: 9500,
+      platformBps: 500,
+      partnerBps: 0,
+      superAffiliateBps: 0,
+      partner: ZERO,
+      superAffiliate: ZERO,
+      ownerAltPayout: ZERO,
+    };
 
-    ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
-    archetypeBatch = await ArchetypeBatch.deploy();
+    const ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
+    archetypeBatch = asContractType<ArchetypeBatch>(
+      await ArchetypeBatch.deploy()
+    );
 
-    ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
-    Archetype = await ethers.getContractFactory("Archetype", {
+    const ArchetypeLogicBrg404 = await ethers.getContractFactory(
+      "ArchetypeLogicBrg404"
+    );
+    archetypeLogic = asContractType<ArchetypeLogicBrg404>(
+      await ArchetypeLogicBrg404.deploy()
+    );
+
+    ArchetypeBrg404 = await ethers.getContractFactory("ArchetypeBrg404", {
       libraries: {
-        ArchetypeLogic: archetypeLogic.address,
+        ArchetypeLogicBrg404: await archetypeLogic.getAddress(),
       },
     });
 
-    ArchetypePayouts = await ethers.getContractFactory("ArchetypePayouts");
-    archetypePayouts = await ArchetypePayouts.deploy();
+    const ArchetypePayouts = await ethers.getContractFactory(
+      "ArchetypePayouts"
+    );
+    archetypePayouts = asContractType<ArchetypePayouts>(
+      await ArchetypePayouts.deploy()
+    );
+    console.log(await archetypePayouts.getAddress());
 
-    archetype = await Archetype.deploy();
-    await archetype.deployed();
+    archetype = await ArchetypeBrg404.deploy();
+    const archetypeAddress = await archetype.getAddress();
 
-    Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy(archetype.address);
-    await factory.deployed();
-
-    const superAffiliate = (await ethers.getSigners())[4];
-
-    DEFAULT_PAYOUT_CONFIG = {
-      ownerBps: 9000,
-      platformBps: 500,
-      partnerBps: 0,
-      superAffiliateBps: 500,
-      partner: ZERO,
-      superAffiliate: superAffiliate.address,
-    };
+    const FactoryBrg404 = await ethers.getContractFactory("FactoryBrg404");
+    factory = asContractType<FactoryBrg404>(
+      await FactoryBrg404.deploy(archetypeAddress)
+    );
+    const factoryAddress = await factory.getAddress();
 
     console.log({
-      factoryAddress: factory.address,
-      archetypeAddress: archetype.address,
+      factoryAddress: factoryAddress,
+      archetypeAddress: archetypeAddress,
     });
   });
 
   beforeEach(async function () {
     const [accountZero, owner, platform] = await ethers.getSigners();
     // reset split balances between tests
-    if (
-      (await archetypePayouts.balance(owner.address)) > ethers.BigNumber.from(0)
-    )
+    if ((await archetypePayouts.balance(owner.address)) > ethers.toBigInt(0))
       await archetypePayouts.connect(owner).withdraw();
-    if (
-      (await archetypePayouts.balance(platform.address)) >
-      ethers.BigNumber.from(0)
-    )
+    if ((await archetypePayouts.balance(platform.address)) > ethers.toBigInt(0))
       await archetypePayouts.connect(platform).withdraw();
   });
 
@@ -147,9 +155,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();
@@ -189,9 +197,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();
@@ -213,9 +221,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();
@@ -223,21 +231,25 @@ describe("Factory", function () {
     expect(symbol).to.equal(DEFAULT_SYMBOL);
     expect(owner).to.equal(accountOne.address);
 
-    ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
-    const NewArchetype = await ethers.getContractFactory("Archetype", {
+    const ArchetypeLogic = await ethers.getContractFactory(
+      "ArchetypeLogicBrg404"
+    );
+    archetypeLogic = asContractType<ArchetypeLogicBrg404>(
+      await ArchetypeLogic.deploy()
+    );
+    const NewArchetype = await ethers.getContractFactory("ArchetypeBrg404", {
       libraries: {
-        ArchetypeLogic: archetypeLogic.address,
+        ArchetypeLogicBrg404: await archetypeLogic.getAddress(),
       },
     });
 
-    // const archetype = await upgrades.deployProxy(Archetype, []);
+    // const archetype = await upgrades.deployProxy(ArchetypeBrg404, []);
 
     const newArchetype = await NewArchetype.deploy();
 
     await newArchetype.deployed();
 
-    await factory.setArchetype(newArchetype.address);
+    await factory.setArchetype(await newArchetype.getAddress());
 
     const myArchetype = await factory.archetype();
 
@@ -253,9 +265,9 @@ describe("Factory", function () {
 
     const result1 = await anotherCollection.wait();
 
-    const anotherollectionAddress = result1.events[0].address || "";
+    const anotherollectionAddress = result1.logs[0].address || "";
 
-    const nft1 = Archetype.attach(anotherollectionAddress);
+    const nft1 = ArchetypeBrg404.attach(anotherollectionAddress);
 
     const symbol1 = await nft1.symbol();
     const owner1 = await nft1.owner();
@@ -277,9 +289,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await expect(nft.lockURI("forever")).to.be.revertedWith("NotOwner");
   });
@@ -299,15 +311,15 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.08"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -352,9 +364,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const addresses = [accountZero.address, accountOne.address];
     // const addresses = [...Array(5000).keys()].map(() => accountZero.address);
@@ -377,7 +389,7 @@ describe("Factory", function () {
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
-        start: ethers.BigNumber.from(Math.floor(tomorrow / 1000)),
+        start: ethers.toBigInt(Math.floor(tomorrow / 1000)),
         end: 0,
         limit: 1000,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -387,7 +399,7 @@ describe("Factory", function () {
       });
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_DEFAULT), {
       price: price,
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 10,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -454,7 +466,7 @@ describe("Factory", function () {
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
         start: 0,
-        end: ethers.BigNumber.from(Math.floor(yesterday / 1000)),
+        end: ethers.toBigInt(Math.floor(yesterday / 1000)),
         limit: 1000,
         maxSupply: DEFAULT_CONFIG.maxSupply,
         unitSize: 0,
@@ -489,9 +501,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     // await nft.connect(owner).setPaused(false);
 
@@ -507,7 +519,7 @@ describe("Factory", function () {
   });
 
   // reminder: If this test is failing with BalanceEmpty() errors, first ensure
-  // that the PLATFORM constant in Archetype.sol is set to local Hardhat network
+  // that the PLATFORM constant in ArchetypeBrg404.sol is set to local Hardhat network
   // account[2]
   it("should validate affiliate signatures and withdraw to correct account", async function () {
     const [accountZero, accountOne, accountTwo, accountThree, accountFour] =
@@ -528,15 +540,15 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.08"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -766,15 +778,15 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -872,15 +884,15 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -1002,15 +1014,15 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -1091,13 +1103,13 @@ describe("Factory", function () {
 
   //   const result = await newCollection.wait();
 
-  //   const newCollectionAddress = result.events[0].address || "";
+  //   const newCollectionAddress = result.logs[0].address || "";
 
-  //   const nft = Archetype.attach(newCollectionAddress);
+  //   const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
   //   await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
   //     price: ethers.utils.parseEther("0.02"),
-  //     start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+  //     start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
   //     end: 0,
   //     limit: 300,
   //     maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -1141,9 +1153,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     // CHANGE URI
     await nft.connect(owner).setBaseURI("test uri");
@@ -1208,8 +1220,8 @@ describe("Factory", function () {
   //     DEFAULT_CONFIG
   //   );
   //   const resultBurn = await newCollectionBurn.wait();
-  //   const newCollectionAddressBurn = resultBurn.events[0].address || "";
-  //   const nftBurn = Archetype.attach(newCollectionAddressBurn);
+  //   const newCollectionAddressBurn = resultBurn.logs[0].address || "";
+  //   const nftBurn = ArchetypeBrg404.attach(newCollectionAddressBurn);
 
   //   const newCollectionMint = await factory.createCollection(
   //     owner.address,
@@ -1218,8 +1230,8 @@ describe("Factory", function () {
   //     DEFAULT_CONFIG
   //   );
   //   const resultMint = await newCollectionMint.wait();
-  //   const newCollectionAddressMint = resultMint.events[0].address || "";
-  //   const nftMint = Archetype.attach(newCollectionAddressMint);
+  //   const newCollectionAddressMint = resultMint.logs[0].address || "";
+  //   const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
   //   let DN404Mirror = await ethers.getContractFactory("DN404Mirror");
   //   const mirror = DN404Mirror.attach(await nftMint.mirrorERC721());
@@ -1227,7 +1239,7 @@ describe("Factory", function () {
   //   await nftBurn.connect(owner).enableBurnToMint(nftMint.address, BURN, false, 2, 0, 5000);
   //   await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
   //     price: 0,
-  //     start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+  //     start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
   //     end: 0,
   //     limit: 300,
   //     maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -1320,8 +1332,8 @@ describe("Factory", function () {
   //     DEFAULT_CONFIG
   //   );
   //   const result = await newCollection.wait();
-  //   const newCollectionAddress = result.events[0].address || "";
-  //   const nft = Archetype.attach(newCollectionAddress);
+  //   const newCollectionAddress = result.logs[0].address || "";
+  //   const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
   //   await expect(nft.connect(owner).setSuperAffiliatePayout(minter.address)).to.be.revertedWith(
   //     "NotPlatform"
@@ -1357,8 +1369,8 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     await nftMint
       .connect(owner)
@@ -1449,15 +1461,15 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.02"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: UINT32_MAX,
@@ -1518,8 +1530,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const invitelist = new Invitelist([owner.address]);
     const root = invitelist.root();
@@ -1527,7 +1539,7 @@ describe("Factory", function () {
 
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.00"),
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 5000,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -1594,8 +1606,8 @@ describe("Factory", function () {
   //   );
 
   //   const result = await newCollection.wait();
-  //   const newCollectionAddress = result.events[0].address || "";
-  //   const nft = Archetype.attach(newCollectionAddress);
+  //   const newCollectionAddress = result.logs[0].address || "";
+  //   const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
   //   // // mock opensea default block list addresses
   //   // ///The default OpenSea operator blocklist subscription.
@@ -1612,7 +1624,7 @@ describe("Factory", function () {
 
   //   // await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
   //   //   price: ethers.utils.parseEther("0.00"),
-  //   //   start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+  //   //   start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
   //   //   limit: 5000,
   //   //   unitSize:0,
   //   // tokenAddress: ZERO
@@ -1644,8 +1656,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     // console.log(owner.address);
     // console.log(holder.address);
@@ -1683,8 +1695,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const erc20 = await (await ethers.getContractFactory("TestErc20")).deploy();
     const tokenAddress = erc20.address;
@@ -1700,7 +1712,7 @@ describe("Factory", function () {
 
     await nft.connect(owner).setInvite(erc20PublicKey, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("1"),
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 300,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -1789,9 +1801,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
@@ -1866,8 +1878,8 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
@@ -1942,9 +1954,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
@@ -2014,14 +2026,14 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     await nftMint
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: 0,
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: PublicMaxSupply - 20,
         maxSupply: PublicMaxSupply,
@@ -2073,14 +2085,14 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     await nftMint
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("1"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: DEFAULT_CONFIG.maxSupply,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2098,7 +2110,7 @@ describe("Factory", function () {
     // set 2nd public list
     await nftMint.connect(owner).setInvite(HASHONE, ipfsh.ctod(CID_ZERO), {
       price: 0,
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 20,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2114,7 +2126,7 @@ describe("Factory", function () {
     // set 3rd public list
     await nftMint.connect(owner).setInvite(HASH256, ipfsh.ctod(CID_ZERO), {
       price: 0,
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 40,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2152,14 +2164,14 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     await nftMint
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: 0,
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 24,
         maxSupply: 36,
@@ -2227,14 +2239,14 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     await nftMint
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: 0,
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 100,
         maxSupply: 100,
@@ -2245,7 +2257,7 @@ describe("Factory", function () {
 
     await nftMint.connect(owner).setInvite(HASHONE, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.1"),
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 100,
       maxSupply: 100,
@@ -2349,8 +2361,8 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     const addresses = [minter.address];
     const invitelist = new Invitelist(addresses);
@@ -2360,7 +2372,7 @@ describe("Factory", function () {
     // private invite list with only minter
     await nftMint.connect(owner).setInvite(root, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.0"),
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 100,
       maxSupply: 100,
@@ -2373,7 +2385,7 @@ describe("Factory", function () {
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 100,
         maxSupply: 100,
@@ -2428,8 +2440,8 @@ describe("Factory", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const nftMint = ArchetypeBrg404.attach(newCollectionAddressMint);
 
     const targets = [nftMint.address, nftMint.address, nftMint.address];
     const values = [0, 0, 0];
@@ -2439,7 +2451,7 @@ describe("Factory", function () {
         ipfsh.ctod(CID_ZERO),
         {
           price: ethers.utils.parseEther("0.0"),
-          start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+          start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
           end: 0,
           limit: 100,
           maxSupply: 100,
@@ -2480,9 +2492,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await sleep(1000);
 
@@ -2500,7 +2512,7 @@ describe("Factory", function () {
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.1"),
-        start: ethers.BigNumber.from(Math.floor(tomorrow / 1000)),
+        start: ethers.toBigInt(Math.floor(tomorrow / 1000)),
         end: 0,
         limit: 1000,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2511,7 +2523,7 @@ describe("Factory", function () {
 
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_DEFAULT), {
       price: price,
-      start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 10,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2562,9 +2574,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await sleep(1000);
 
@@ -2653,14 +2665,14 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.0008"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 50,
         maxSupply: 50,
@@ -2752,8 +2764,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const mintPrice = ethers.utils.parseEther("0.08");
     const paidPrice = ethers.utils.parseEther("0.12");
@@ -2763,7 +2775,7 @@ describe("Factory", function () {
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: mintPrice,
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 50,
         maxSupply: 50,
@@ -2809,9 +2821,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     const mintPrice = ethers.utils.parseEther("0.08");
     const paidPrice = ethers.utils.parseEther("0.20");
@@ -2820,7 +2832,7 @@ describe("Factory", function () {
       .connect(owner)
       .setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
         price: ethers.utils.parseEther("0.08"),
-        start: ethers.BigNumber.from(Math.floor(Date.now() / 1000)),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 300,
         maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2881,8 +2893,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBrg404.attach(newCollectionAddress);
 
     await nft
       .connect(owner)
