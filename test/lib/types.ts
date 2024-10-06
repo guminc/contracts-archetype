@@ -14,6 +14,23 @@ export type IArchetypeErc721aConfig = {
   };
 };
 
+export type IArchetypeBrg404Config = {
+  baseUri: string;
+  affiliateSigner: string;
+  maxSupply: number;
+  maxBatchSize: number;
+  affiliateFee: number;
+  defaultRoyalty: number;
+  erc20Ratio: number;
+  discounts: {
+    affiliateDiscount: number;
+    mintTiers: {
+      numMints: number;
+      mintDiscount: number;
+    }[];
+  };
+};
+
 export type IArchetypeErc1155RandomConfig = {
   baseUri: string;
   affiliateSigner: string;

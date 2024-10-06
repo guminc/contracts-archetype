@@ -56,6 +56,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   ) external initializer {
     _name = name_;
     _symbol = symbol_;
+    config = config_;
 
     _initializeDN420(0, address(0));
 
@@ -80,7 +81,6 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
         ++i;
       }
     }
-    config = config_;
     __Ownable_init();
 
     uint256 totalShares = payoutConfig_.ownerBps +
@@ -464,6 +464,10 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   //
   // INTERNAL
   //
+
+  function _unit() internal view override returns (uint256) {
+    return (10 ** 18) * uint256(config.erc20Ratio);
+  }
 
   function _msgSender() internal view override returns (address) {
     return msg.sender == BATCH ? tx.origin : msg.sender;
