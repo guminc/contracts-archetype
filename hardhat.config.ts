@@ -6,6 +6,7 @@ import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@matterlabs/hardhat-zksync";
 import "@matterlabs/hardhat-zksync-deploy";
+require("hardhat-contract-sizer");
 
 dotenv.config();
 

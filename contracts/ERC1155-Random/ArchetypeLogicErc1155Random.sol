@@ -547,11 +547,6 @@ library ArchetypeLogicErc1155Random {
     return false;
   }
 
-  function random() public view returns (uint256) {
-    uint256 randomHash = uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp)));
-    return randomHash;
-  }
-
   function _msgSender() internal view returns (address) {
     return msg.sender == BATCH ? tx.origin : msg.sender;
   }
