@@ -529,8 +529,8 @@ describe("Factory", function () {
 
     // test invalid signature
     const invalidReferral = await accountZero.signMessage(
-      ethers.utils.arrayify(
-        ethers.utils.solidityKeccak256(["address"], [affiliate.address])
+      ethers.getBytes(
+        ethers.solidityPackedKeccak256(["address"], [affiliate.address])
       )
     );
 
@@ -550,8 +550,8 @@ describe("Factory", function () {
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
-      ethers.utils.arrayify(
-        ethers.utils.solidityKeccak256(["address"], [affiliate.address])
+      ethers.getBytes(
+        ethers.solidityPackedKeccak256(["address"], [affiliate.address])
       )
     );
 
@@ -587,9 +587,7 @@ describe("Factory", function () {
     // withdraw owner from split contract
     let balance = await ethers.provider.getBalance(owner.address);
     await archetypePayouts.connect(owner).withdraw();
-    let diff =
-      (await ethers.provider.getBalance(owner.address)).toBigInt() -
-      balance.toBigInt();
+    let diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0611"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
       Number(ethers.parseEther("0.0612"))
@@ -627,9 +625,7 @@ describe("Factory", function () {
     // withdraw owner balance again
     balance = await ethers.provider.getBalance(owner.address);
     await archetypePayouts.connect(owner).withdraw();
-    diff =
-      (await ethers.provider.getBalance(owner.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0611"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
       Number(ethers.parseEther("0.0612"))
@@ -638,18 +634,14 @@ describe("Factory", function () {
     // withdraw platform balance
     balance = await ethers.provider.getBalance(platform.address);
     await archetypePayouts.connect(platform).withdraw();
-    diff =
-      (await ethers.provider.getBalance(platform.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(platform.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0067")));
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.068")));
 
     // withdraw dev vault balance
     balance = await ethers.provider.getBalance(devVault.address);
     await archetypePayouts.connect(devVault).withdraw();
-    diff =
-      (await ethers.provider.getBalance(devVault.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(devVault.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0067")));
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.068")));
 
@@ -659,9 +651,7 @@ describe("Factory", function () {
       "NotShareholder"
     );
     await nft.connect(affiliate).withdrawAffiliate();
-    diff =
-      (await ethers.provider.getBalance(affiliate.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(affiliate.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.020")));
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.024")));
 
@@ -699,12 +689,11 @@ describe("Factory", function () {
         baseUri:
           "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
         affiliateSigner: AFFILIATE_SIGNER.address,
-        ownerAltPayout: ZERO,
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
-        platformFee: 1000,
         defaultRoyalty: 500,
+        erc20Ratio: ERC20RATIO,
         discounts: {
           affiliateDiscount: 1000, // 10%
           mintTiers: [
@@ -745,8 +734,8 @@ describe("Factory", function () {
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
-      ethers.utils.arrayify(
-        ethers.utils.solidityKeccak256(["address"], [affiliate.address])
+      ethers.getBytes(
+        ethers.solidityPackedKeccak256(["address"], [affiliate.address])
       )
     );
 
@@ -814,12 +803,11 @@ describe("Factory", function () {
         baseUri:
           "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
         affiliateSigner: AFFILIATE_SIGNER.address,
-        ownerAltPayout: ZERO,
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
-        platformFee: 1000,
         defaultRoyalty: 500,
+        erc20Ratio: ERC20RATIO,
         discounts: {
           affiliateDiscount: 0, // 10%
           mintTiers: [],
@@ -847,8 +835,8 @@ describe("Factory", function () {
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
-      ethers.utils.arrayify(
-        ethers.utils.solidityKeccak256(["address"], [affiliate.address])
+      ethers.getBytes(
+        ethers.solidityPackedKeccak256(["address"], [affiliate.address])
       )
     );
 
@@ -874,9 +862,7 @@ describe("Factory", function () {
     // withdraw owner balance
     let balance = await ethers.provider.getBalance(owner.address);
     await archetypePayouts.connect(owner).withdraw();
-    let diff =
-      (await ethers.provider.getBalance(owner.address)).toBigInt() -
-      balance.toBigInt();
+    let diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0760"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
       Number(ethers.parseEther("0.0765"))
@@ -885,9 +871,7 @@ describe("Factory", function () {
     // withdraw platform balance
     balance = await ethers.provider.getBalance(platform.address);
     await archetypePayouts.connect(platform).withdraw(); // partial withdraw
-    diff =
-      (await ethers.provider.getBalance(platform.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(platform.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0042")));
     expect(Number(diff)).to.lessThanOrEqual(
       Number(ethers.parseEther("0.0425"))
@@ -896,9 +880,7 @@ describe("Factory", function () {
     // withdraw super affiliate balance
     balance = await ethers.provider.getBalance(superAffiliate.address);
     await archetypePayouts.connect(superAffiliate).withdraw(); // partial withdraw
-    diff =
-      (await ethers.provider.getBalance(superAffiliate.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(superAffiliate.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0042")));
     expect(Number(diff)).to.lessThanOrEqual(
       Number(ethers.parseEther("0.0425"))
@@ -907,9 +889,7 @@ describe("Factory", function () {
     // withdraw affiliate balance
     balance = await ethers.provider.getBalance(affiliate.address);
     await nft.connect(affiliate).withdrawAffiliate();
-    diff =
-      (await ethers.provider.getBalance(affiliate.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(affiliate.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.014")));
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.015")));
   });
@@ -929,13 +909,11 @@ describe("Factory", function () {
         baseUri:
           "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
         affiliateSigner: AFFILIATE_SIGNER.address,
-        ownerAltPayout: ownerAltPayout.address,
-        superAffiliatePayout: ZERO,
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
-        platformFee: 1000,
         defaultRoyalty: 500,
+        erc20Ratio: ERC20RATIO,
         discounts: {
           affiliateDiscount: 0, // 10%
           mintTiers: [],
@@ -978,8 +956,7 @@ describe("Factory", function () {
       .withdrawFrom(owner.address, ownerAltPayout.address);
     // check that eth was sent to alt address
     let diff =
-      (await ethers.provider.getBalance(ownerAltPayout.address)).toBigInt() -
-      balance.toBigInt();
+      (await ethers.provider.getBalance(ownerAltPayout.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.089"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.090")));
 
@@ -1001,9 +978,7 @@ describe("Factory", function () {
       .connect(ownerAltPayout)
       .withdrawFrom(owner.address, ownerAltPayout.address);
     // check that eth was sent to alt address
-    diff =
-      (await ethers.provider.getBalance(ownerAltPayout.address)).toBigInt() -
-      balance.toBigInt();
+    diff = (await ethers.provider.getBalance(ownerAltPayout.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.089"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.090")));
   });
@@ -1612,7 +1587,7 @@ describe("Factory", function () {
 
     console.log({ balanceBefore: balanceBefore.toString() });
 
-    const erc20PublicKey = ethers.utils.solidityKeccak256(
+    const erc20PublicKey = ethers.solidityPackedKeccak256(
       ["address"],
       [tokenAddress]
     );
@@ -2246,9 +2221,7 @@ describe("Factory", function () {
     const recipient_ = minter2.address;
     let ethbalance = await ethers.provider.getBalance(minter2.address);
     await archetypeBatch.connect(owner).rescueETH(recipient_);
-    let diff =
-      (await ethers.provider.getBalance(minter2.address)).toBigInt() -
-      ethbalance.toBigInt();
+    let diff = (await ethers.provider.getBalance(minter2.address)) - ethbalance;
 
     expect(Number(diff)).to.be.equal(Number(ethers.parseEther("0.1")));
   });
@@ -2712,13 +2685,15 @@ describe("Factory", function () {
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
-      ethers.utils.arrayify(
-        ethers.utils.solidityKeccak256(["address"], [affiliate.address])
+      ethers.getBytes(
+        ethers.solidityPackedKeccak256(["address"], [affiliate.address])
       )
     );
 
     const preContractBalance = await ethers.provider.getBalance(nft.address);
-    const preUserBalance = await accountZero.getBalance();
+    const preUserBalance = await ethers.provider.getBalance(
+      accountZero.address
+    );
 
     await nft
       .connect(accountZero)
@@ -2733,7 +2708,9 @@ describe("Factory", function () {
       );
 
     const postContractBalance = await ethers.provider.getBalance(nft.address);
-    const postUserBalance = await accountZero.getBalance();
+    const postUserBalance = await ethers.provider.getBalance(
+      accountZero.address
+    );
 
     const delta = ethers.parseEther("0.001");
     expect(postUserBalance).closeTo(preUserBalance.sub(mintPrice), delta);
