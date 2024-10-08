@@ -414,6 +414,18 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     options.discountsLocked = true;
   }
 
+  function setOwnerAltPayout(address ownerAltPayout) external _onlyOwner {
+    if (options.ownerAltPayoutLocked) {
+      revert LockedForever();
+    }
+
+    payoutConfig.ownerAltPayout = ownerAltPayout;
+  }
+
+  function lockOwnerAltPayout() external _onlyOwner {
+    options.ownerAltPayoutLocked = true;
+  }
+
   function setMaxBatchSize(uint32 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
   }
