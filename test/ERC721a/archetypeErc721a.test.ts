@@ -1978,7 +1978,7 @@ describe("FactoryErc721a", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      .setAdvancedInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: ethers.parseEther("1"),
         reservePrice: ethers.parseEther("0.1"),
         start: 0,
@@ -2052,7 +2052,7 @@ describe("FactoryErc721a", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      .setAdvancedInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: ethers.parseEther("1"),
         reservePrice: ethers.parseEther("10"),
         start: 0,
@@ -2127,7 +2127,7 @@ describe("FactoryErc721a", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      .setAdvancedInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: ethers.parseEther("1"),
         reservePrice: ethers.parseEther("0.1"),
         start: 0,

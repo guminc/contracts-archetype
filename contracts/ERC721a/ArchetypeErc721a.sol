@@ -41,7 +41,7 @@ contract ArchetypeErc721a is
   //
   // VARIABLES
   //
-  mapping(bytes32 => DutchInvite) public invites;
+  mapping(bytes32 => AdvancedInvite) public invites;
   mapping(bytes32 => BurnInvite) public burnInvites;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
@@ -122,7 +122,7 @@ contract ArchetypeErc721a is
       revert InvalidConfig();
     }
 
-    DutchInvite storage invite = invites[auth.key];
+    AdvancedInvite storage invite = invites[auth.key];
     uint256 quantity;
 
     for (uint256 i; i < toList.length; ) {
@@ -193,7 +193,7 @@ contract ArchetypeErc721a is
     address affiliate,
     bytes calldata signature
   ) public payable {
-    DutchInvite storage i = invites[auth.key];
+    AdvancedInvite storage i = invites[auth.key];
 
     if (i.unitSize > 1) {
       quantity = quantity * i.unitSize;
@@ -350,7 +350,7 @@ contract ArchetypeErc721a is
     uint256 quantity,
     bool affiliateUsed
   ) external view returns (uint256) {
-    DutchInvite storage i = invites[key];
+    AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
     return ArchetypeLogicErc721a.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
   }
@@ -485,7 +485,7 @@ contract ArchetypeErc721a is
         revert NotApprovedToTransfer();
       }
     }
-    invites[_key] = DutchInvite({
+    invites[_key] = AdvancedInvite({
       price: _invite.price,
       reservePrice: _invite.price,
       delta: 0,
@@ -501,22 +501,22 @@ contract ArchetypeErc721a is
     emit Invited(_key, _cid);
   }
 
-  function setDutchInvite(
+  function setAdvancedInvite(
     bytes32 _key,
     bytes32 _cid,
-    DutchInvite memory _dutchInvite
+    AdvancedInvite memory _AdvancedInvite
   ) external _onlyOwner {
     // approve token for withdrawals if erc20 list
-    if (_dutchInvite.tokenAddress != address(0)) {
-      bool success = IERC20(_dutchInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
+    if (_AdvancedInvite.tokenAddress != address(0)) {
+      bool success = IERC20(_AdvancedInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
       if (!success) {
         revert NotApprovedToTransfer();
       }
     }
-    if (_dutchInvite.start < block.timestamp) {
-      _dutchInvite.start = uint32(block.timestamp);
+    if (_AdvancedInvite.start < block.timestamp) {
+      _AdvancedInvite.start = uint32(block.timestamp);
     }
-    invites[_key] = _dutchInvite;
+    invites[_key] = _AdvancedInvite;
     emit Invited(_key, _cid);
   }
 

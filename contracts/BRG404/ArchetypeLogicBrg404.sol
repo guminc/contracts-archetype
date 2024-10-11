@@ -92,7 +92,7 @@ struct Options {
   bool ownerAltPayoutLocked;
 }
 
-struct DutchInvite {
+struct AdvancedInvite {
   uint128 price; // in erc20
   uint128 reservePrice; // in erc20
   uint128 delta; // in erc20
@@ -143,7 +143,7 @@ library ArchetypeLogicBrg404 {
 
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
-    DutchInvite storage invite,
+    AdvancedInvite storage invite,
     Discount storage discounts,
     uint256 numTokens,
     uint256 listSupply,
@@ -194,7 +194,7 @@ library ArchetypeLogicBrg404 {
   }
 
   function validateMint(
-    DutchInvite storage i,
+    AdvancedInvite storage i,
     Config storage config,
     Auth calldata auth,
     mapping(address => mapping(bytes32 => uint256)) storage minted,
@@ -278,7 +278,7 @@ library ArchetypeLogicBrg404 {
   }
 
   function updateBalances(
-    DutchInvite storage i,
+    AdvancedInvite storage i,
     Config storage config,
     mapping(address => uint128) storage _ownerBalance,
     mapping(address => mapping(address => uint128)) storage _affiliateBalance,
