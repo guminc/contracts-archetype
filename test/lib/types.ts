@@ -21,6 +21,7 @@ export type IArchetypeBrg404Config = {
   maxBatchSize: number;
   affiliateFee: number;
   defaultRoyalty: number;
+  remintPremium: number;
   erc20Ratio: number;
   discounts: {
     affiliateDiscount: number;

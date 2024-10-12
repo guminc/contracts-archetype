@@ -70,6 +70,7 @@ struct Config {
   uint128 maxBatchSize; // in erc20
   uint16 affiliateFee; //BPS
   uint16 defaultRoyalty; //BPS
+  uint16 remintPremium; //BPS premium for burning and reminting a new token
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
   Discount discounts;
 }

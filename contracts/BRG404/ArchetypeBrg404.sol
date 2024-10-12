@@ -216,6 +216,17 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     }
   }
 
+  function burnToRemint(uint256 quantity, address to) public {
+    uint256 mintQuantity = quantity * _unit();
+    uint256 burnQuantity =  mintQuantity * (10000 + config.remintPremium) / 10000;
+
+    transferFrom(_msgSender(), 0x000000000000000000000000000000000000dEaD, burnQuantity);
+
+    bytes memory _data;
+    _mintNext(to, mintQuantity, _data);
+    
+  }
+
   function name() public view override returns (string memory) {
     return _name;
   }
@@ -284,6 +295,18 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   function numNftsMinted() public view returns (uint256) {
     return totalSupply() / _unit();
   }
+
+  function balanceOfNFT(address owner) public view returns (uint256) {
+    return _balanceOfNFT(owner);
+  }
+
+  function exists(uint256 id) external view returns (bool) {
+    return _exists(id);
+  }
+
+  // function findOwnedIds(address owner, uint256 lower, uint256 upper) external view returns (uint256[] memory ids){
+  //   return _findOwnedIds(owner, lower, upper);
+  // }
 
   function platform() external pure returns (address) {
     return PLATFORM;
@@ -400,6 +423,10 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
 
   function setMaxBatchSize(uint32 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
+  }
+
+  function setRemintPremium(uint16 remintPremium) external _onlyOwner {
+    config.remintPremium = remintPremium;
   }
 
   function setInvite(
