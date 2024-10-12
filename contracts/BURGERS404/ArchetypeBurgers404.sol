@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Archetype v0.8.0 - BRG404
+// Archetype v0.8.0 - BURGERS404
 //
 //        d8888                 888               888
 //       d88888                 888               888
@@ -15,13 +15,13 @@
 
 pragma solidity ^0.8.20;
 
-import "./ArchetypeLogicBrg404.sol";
+import "./ArchetypeLogicBurgers404.sol";
 import "dn404/src/DN420.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "solady/src/utils/LibString.sol";
 import "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
-contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upgradeable {
+contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upgradeable {
   //
   // EVENTS
   //
@@ -183,7 +183,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     }
 
     uint128 cost = uint128(
-      ArchetypeLogicBrg404.computePrice(
+      ArchetypeLogicBurgers404.computePrice(
         invite,
         config.discounts,
         args.quantity,
@@ -192,7 +192,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       )
     );
 
-    ArchetypeLogicBrg404.validateMint(invite, config, auth, _minted, signature, args, cost);
+    ArchetypeLogicBurgers404.validateMint(invite, config, auth, _minted, signature, args, cost);
 
     if (invite.limit < invite.maxSupply) {
       _minted[_msgSender()][auth.key] += quantity;
@@ -201,7 +201,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       _listSupply[auth.key] += quantity;
     }
 
-    ArchetypeLogicBrg404.updateBalances(
+    ArchetypeLogicBurgers404.updateBalances(
       invite,
       config,
       _ownerBalance,
@@ -251,7 +251,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   function withdrawTokens(address[] memory tokens) public {
-    ArchetypeLogicBrg404.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
+    ArchetypeLogicBurgers404.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
   }
 
   function withdrawAffiliate() external {
@@ -261,7 +261,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   function withdrawTokensAffiliate(address[] memory tokens) public {
-    ArchetypeLogicBrg404.withdrawTokensAffiliate(_affiliateBalance, tokens);
+    ArchetypeLogicBurgers404.withdrawTokensAffiliate(_affiliateBalance, tokens);
   }
 
   function ownerBalance() external view returns (uint128) {
@@ -319,7 +319,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   ) external view returns (uint256) {
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicBrg404.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
+    return ArchetypeLogicBurgers404.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
   }
 
   //

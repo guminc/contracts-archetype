@@ -14,7 +14,7 @@ export type IArchetypeErc721aConfig = {
   };
 };
 
-export type IArchetypeBrg404Config = {
+export type IArchetypeBurgers404Config = {
   baseUri: string;
   affiliateSigner: string;
   maxSupply: number;

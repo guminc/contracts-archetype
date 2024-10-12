@@ -46,11 +46,14 @@ replaceConstants(erc1155RandomContractPath);
 
 const brg404RandomContractPath = path.resolve(
   __dirname,
-  "../contracts/BRG404/ArchetypeLogicBrg404.sol"
+  "../contracts/BURGERS404/ArchetypeLogicBurgers404.sol"
 );
-const originalBrg404File = fs.readFileSync(brg404RandomContractPath, "utf8");
+const originalBurgers404File = fs.readFileSync(
+  brg404RandomContractPath,
+  "utf8"
+);
 fs.writeFileSync(
-  "./contracts/BRG404/ArchetypeLogicBrg404.sol.bak",
-  originalBrg404File
+  "./contracts/BURGERS404/ArchetypeLogicBurgers404.sol.bak",
+  originalBurgers404File
 );
 replaceConstants(brg404RandomContractPath);

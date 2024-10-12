@@ -105,8 +105,9 @@ const config: HardhatUserConfig = {
           ArchetypeLogicErc1155Random:
             "0x0000000000000000000000000000000000000000", // update
         },
-        "contracts/BRG404/ArchetypeLogicBrg404.sol": {
-          ArchetypeLogicBrg404: "0x0000000000000000000000000000000000000000", // update
+        "contracts/BURGERS404/ArchetypeLogicBurgers404.sol": {
+          ArchetypeLogicBurgers404:
+            "0x0000000000000000000000000000000000000000", // update
         },
       },
     },

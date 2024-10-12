@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ArchetypeLogic v0.8.0 - BRG404
+// ArchetypeLogic v0.8.0 - BURGERS404
 //
 //        d8888                 888               888
 //       d88888                 888               888
@@ -134,7 +134,7 @@ uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 uint256 constant ERC20_UNIT = 10 ** 18;
 
-library ArchetypeLogicBrg404 {
+library ArchetypeLogicBurgers404 {
   //
   // EVENTS
   //

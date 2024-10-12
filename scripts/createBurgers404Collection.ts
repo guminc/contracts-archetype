@@ -1,5 +1,5 @@
 import { ethers, run } from "hardhat";
-import { ArchetypeBrg404, FactoryBrg404 } from "../typechain-types";
+import { ArchetypeBurgers404, FactoryBurgers404 } from "../typechain-types";
 import { BaseContract } from "ethers";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -10,7 +10,7 @@ function asContractType<T extends BaseContract>(contract: any): T {
 async function main() {
   const Factory = await ethers.getContractFactory("FactoryErc721a");
 
-  const factory = asContractType<FactoryBrg404>(
+  const factory = asContractType<FactoryBurgers404>(
     Factory.attach("0x06daA4c7E143E46B95D8376CedCa5CCDf6d7136b")
   );
   const factoryAddress = await factory.getAddress();
@@ -31,6 +31,7 @@ async function main() {
       maxBatchSize: 50000,
       affiliateFee: 1500,
       defaultRoyalty: 500,
+      remintPremium: 2000,
       erc20Ratio: 1000,
       discounts: { affiliateDiscount: 0, mintTiers: [] },
     },
@@ -41,7 +42,7 @@ async function main() {
       superAffiliateBps: 0,
       partner: "0x0000000000000000000000000000000000000000",
       superAffiliate: "0x0000000000000000000000000000000000000000",
-      //   ownerAltPayout: "0x0000000000000000000000000000000000000000",
+      ownerAltPayout: "0x0000000000000000000000000000000000000000",
     }
   );
 
@@ -55,17 +56,17 @@ async function main() {
   console.log({ newCollectionAddress });
 
   //   const ArchetypeLogic = await ethers.getContractFactory(
-  //     "ArchetypeLogicBrg404"
+  //     "ArchetypeLogicBurgers404"
   //   );
   //   const archetypeLogic = await ArchetypeLogic.attach(
   //     "0x4cfe2b3522a223444cce2E5031EBC3EBe51115a8"
   //   );
-  //   const Archetype = await ethers.getContractFactory("ArchetypeBrg404", {
+  //   const Archetype = await ethers.getContractFactory("ArchetypeBurgers404", {
   //     libraries: {
   //       ArchetypeLogicErc721a: await archetypeLogic.getAddress(),
   //     },
   //   });
-  //   const archetype = asContractType<ArchetypeBrg404>(
+  //   const archetype = asContractType<ArchetypeBurgers404>(
   //     Archetype.attach(newCollectionAddress)
   //   );
 
