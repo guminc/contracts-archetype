@@ -13,7 +13,7 @@
 //                                                       Y8b d88P 888
 //                                                        "Y88P"  888
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import "./ArchetypeLogicErc1155Random.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
@@ -427,13 +427,7 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     bytes32 _cid,
     Invite calldata _invite
   ) external _onlyOwner {
-    if (_invite.tokenAddress != address(0)) {
-      bool success = IERC20(_invite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
-      if (!success) {
-        revert NotApprovedToTransfer();
-      }
-    }
-    invites[_key] = AdvancedInvite({
+    setAdvancedInvite(_key, _cid, AdvancedInvite({
       price: _invite.price,
       reservePrice: _invite.price,
       delta: 0,
@@ -445,15 +439,14 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
       unitSize: _invite.unitSize,
       tokenAddress: _invite.tokenAddress,
       tokenIdsExcluded: _invite.tokenIdsExcluded
-    });
-    emit Invited(_key, _cid);
+    }));
   }
 
   function setAdvancedInvite(
     bytes32 _key,
     bytes32 _cid,
     AdvancedInvite memory _AdvancedInvite
-  ) external _onlyOwner {
+  ) public _onlyOwner {
     // approve token for withdrawals if erc20 list
     if (_AdvancedInvite.tokenAddress != address(0)) {
       bool success = IERC20(_AdvancedInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);

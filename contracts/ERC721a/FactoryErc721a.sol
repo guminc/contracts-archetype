@@ -13,7 +13,7 @@
 //                                                  Y8b d88P
 //                                                   "Y88P"
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import "./ArchetypeErc721a.sol";
 import "./ArchetypeLogicErc721a.sol";

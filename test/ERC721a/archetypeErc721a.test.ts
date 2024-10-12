@@ -376,7 +376,6 @@ describe("FactoryErc721a", function () {
 
     const today = new Date();
     const tomorrow = today.setDate(today.getDate() + 1);
-    const yesterday = today.setDate(today.getDate() + -1);
 
     console.log({ toda: Math.floor(Date.now() / 1000) });
     console.log({ tomo: Math.floor(tomorrow / 1000) });
@@ -448,10 +447,11 @@ describe("FactoryErc721a", function () {
         })
     ).to.be.revertedWithCustomError(archetypeLogic, "MintNotYetStarted");
 
+    const blockTimestamp = (await ethers.provider.getBlock("latest")).timestamp;
     await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
       price: ethers.parseEther("0.1"),
-      start: 0,
-      end: ethers.toBigInt(Math.floor(yesterday / 1000)),
+      start: ethers.toBigInt(blockTimestamp),
+      end: ethers.toBigInt(blockTimestamp + 10),
       limit: 1000,
       maxSupply: DEFAULT_CONFIG.maxSupply,
       unitSize: 0,
@@ -459,12 +459,14 @@ describe("FactoryErc721a", function () {
       isBlacklist: false,
     });
 
+    await ethers.provider.send("evm_increaseTime", [20]);
+
     // ended list rejectiong
     await expect(
       nft
         .connect(accountTwo)
         .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
-          value: price * BigInt(2),
+          value: ethers.parseEther("0.1") * BigInt(2),
         })
     ).to.be.revertedWithCustomError(archetypeLogic, "MintEnded");
 
@@ -1294,11 +1296,12 @@ describe("FactoryErc721a", function () {
     ).to.be.revertedWithCustomError(archetypeLogic, "MintingPaused");
 
     // re-enable with time set in future
+    const blockTimestamp = (await ethers.provider.getBlock("latest")).timestamp;
     await nftBurn
       .connect(owner)
       .setBurnInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         ...burnInvite,
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000) + 10000),
+        start: ethers.toBigInt(Math.floor(blockTimestamp) + 10000),
       });
 
     // burn will fail as burn is time is set in future

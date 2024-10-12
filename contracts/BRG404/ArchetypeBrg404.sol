@@ -13,7 +13,7 @@
 //                                                       Y8b d88P 888
 //                                                        "Y88P"  888
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import "./ArchetypeLogicBrg404.sol";
 import "dn404/src/DN420.sol";
@@ -119,6 +119,8 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     }
 
     AdvancedInvite storage invite = invites[auth.key];
+    uint256 curSupply = numErc20Minted();
+
     uint256 quantity;
 
     for (uint256 i; i < toList.length; ) {
@@ -138,13 +140,44 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       }
     }
 
+    validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
+  }
+
+  function mintTo(
+    Auth calldata auth,
+    uint256 quantity,
+    address to,
+    address affiliate,
+    bytes calldata signature
+  ) public payable {
+    AdvancedInvite storage invite = invites[auth.key];
+
+    if (invite.unitSize > 1) {
+      quantity = quantity * invite.unitSize;
+    }
+    uint256 curSupply = numErc20Minted();
+
+    bytes memory _data;
+    _mintNext(to, quantity * ERC20_UNIT, _data);
+
+    validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
+  }
+
+  function validateAndCreditMint(
+    AdvancedInvite storage invite,
+    Auth calldata auth,
+    uint256 quantity,
+    uint256 curSupply,
+    address affiliate,
+    bytes calldata signature
+  ) internal {
     ValidationArgs memory args;
     {
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
         quantity: quantity,
-        curSupply: numErc20Minted(),
+        curSupply: curSupply,
         listSupply: _listSupply[auth.key]
       });
     }
@@ -170,67 +203,6 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
 
     ArchetypeLogicBrg404.updateBalances(
       invite,
-      config,
-      _ownerBalance,
-      _affiliateBalance,
-      affiliate,
-      quantity,
-      cost
-    );
-
-    if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
-    }
-  }
-
-  function mintTo(
-    Auth calldata auth,
-    uint256 quantity,
-    address to,
-    address affiliate,
-    bytes calldata signature
-  ) public payable {
-    AdvancedInvite storage i = invites[auth.key];
-
-    if (i.unitSize > 1) {
-      quantity = quantity * i.unitSize;
-    }
-
-    ValidationArgs memory args;
-    {
-      args = ValidationArgs({
-        owner: owner(),
-        affiliate: affiliate,
-        quantity: quantity,
-        curSupply: numErc20Minted(),
-        listSupply: _listSupply[auth.key]
-      });
-    }
-
-    uint128 cost = uint128(
-      ArchetypeLogicBrg404.computePrice(
-        i,
-        config.discounts,
-        args.quantity,
-        args.listSupply,
-        args.affiliate != address(0)
-      )
-    );
-
-    ArchetypeLogicBrg404.validateMint(i, config, auth, _minted, signature, args, cost);
-
-    bytes memory _data;
-    _mintNext(to, quantity * ERC20_UNIT, _data);
-
-    if (i.limit < i.maxSupply) {
-      _minted[_msgSender()][auth.key] += quantity;
-    }
-    if (i.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += quantity;
-    }
-
-    ArchetypeLogicBrg404.updateBalances(
-      i,
       config,
       _ownerBalance,
       _affiliateBalance,
@@ -385,30 +357,30 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     options.affiliateFeeLocked = true;
   }
 
-  // function setDiscounts(Discount calldata discounts) external _onlyOwner {
-  //   if (options.discountsLocked) {
-  //     revert LockedForever();
-  //   }
+  function setDiscounts(Discount calldata discounts) external _onlyOwner {
+    if (options.discountsLocked) {
+      revert LockedForever();
+    }
 
-  //   if (discounts.affiliateDiscount > MAXBPS) {
-  //     revert InvalidConfig();
-  //   }
+    if (discounts.affiliateDiscount > MAXBPS) {
+      revert InvalidConfig();
+    }
 
-  //   // ensure mint tiers are correctly ordered from highest to lowest.
-  //   for (uint256 i = 1; i < discounts.mintTiers.length; ) {
-  //     if (
-  //       discounts.mintTiers[i].mintDiscount > MAXBPS ||
-  //       discounts.mintTiers[i].numMints > discounts.mintTiers[i - 1].numMints
-  //     ) {
-  //       revert InvalidConfig();
-  //     }
-  //     unchecked {
-  //       ++i;
-  //     }
-  //   }
+    // ensure mint tiers are correctly ordered from highest to lowest.
+    for (uint256 i = 1; i < discounts.mintTiers.length; ) {
+      if (
+        discounts.mintTiers[i].mintDiscount > MAXBPS ||
+        discounts.mintTiers[i].numMints > discounts.mintTiers[i - 1].numMints
+      ) {
+        revert InvalidConfig();
+      }
+      unchecked {
+        ++i;
+      }
+    }
 
-  //   config.discounts = discounts;
-  // }
+    config.discounts = discounts;
+  }
 
   function lockDiscounts() external _onlyOwner {
     options.discountsLocked = true;
@@ -435,14 +407,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     bytes32 _cid,
     Invite calldata _invite
   ) external _onlyOwner {
-    // approve token for withdrawals if erc20 list
-    if (_invite.tokenAddress != address(0)) {
-      bool success = IERC20(_invite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
-      if (!success) {
-        revert NotApprovedToTransfer();
-      }
-    }
-    invites[_key] = AdvancedInvite({
+    setAdvancedInvite(_key, _cid, AdvancedInvite({
       price: _invite.price,
       reservePrice: _invite.price,
       delta: 0,
@@ -454,15 +419,14 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       unitSize: _invite.unitSize,
       tokenAddress: _invite.tokenAddress,
       isBlacklist: _invite.isBlacklist
-    });
-    emit Invited(_key, _cid);
+    }));
   }
 
   function setAdvancedInvite(
     bytes32 _key,
     bytes32 _cid,
     AdvancedInvite memory _AdvancedInvite
-  ) external _onlyOwner {
+  ) public _onlyOwner {
     // approve token for withdrawals if erc20 list
     if (_AdvancedInvite.tokenAddress != address(0)) {
       bool success = IERC20(_AdvancedInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);

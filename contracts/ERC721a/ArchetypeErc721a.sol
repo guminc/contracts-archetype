@@ -123,8 +123,9 @@ contract ArchetypeErc721a is
     }
 
     AdvancedInvite storage invite = invites[auth.key];
+    uint256 curSupply = _totalMinted();
+    
     uint256 quantity;
-
     for (uint256 i; i < toList.length; ) {
       uint256 quantityToAdd;
       if (invite.unitSize > 1) {
@@ -141,13 +142,43 @@ contract ArchetypeErc721a is
       }
     }
 
+    validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
+  }
+
+  function mintTo(
+    Auth calldata auth,
+    uint256 quantity,
+    address to,
+    address affiliate,
+    bytes calldata signature
+  ) public payable {
+    AdvancedInvite storage invite = invites[auth.key];
+
+    if (invite.unitSize > 1) {
+      quantity = quantity * invite.unitSize;
+    }
+
+    uint256 curSupply = _totalMinted();
+    _mint(to, quantity);
+
+    validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
+  }
+
+  function validateAndCreditMint(
+    AdvancedInvite storage invite,
+    Auth calldata auth,
+    uint256 quantity,
+    uint256 curSupply,
+    address affiliate,
+    bytes calldata signature
+  ) internal {
     ValidationArgs memory args;
     {
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
         quantity: quantity,
-        curSupply: _totalMinted(),
+        curSupply: curSupply,
         listSupply: _listSupply[auth.key]
       });
     }
@@ -173,66 +204,6 @@ contract ArchetypeErc721a is
 
     ArchetypeLogicErc721a.updateBalances(
       invite.tokenAddress,
-      config,
-      _ownerBalance,
-      _affiliateBalance,
-      affiliate,
-      quantity,
-      cost
-    );
-
-    if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
-    }
-  }
-
-  function mintTo(
-    Auth calldata auth,
-    uint256 quantity,
-    address to,
-    address affiliate,
-    bytes calldata signature
-  ) public payable {
-    AdvancedInvite storage i = invites[auth.key];
-
-    if (i.unitSize > 1) {
-      quantity = quantity * i.unitSize;
-    }
-
-    ValidationArgs memory args;
-    {
-      args = ValidationArgs({
-        owner: owner(),
-        affiliate: affiliate,
-        quantity: quantity,
-        curSupply: _totalMinted(),
-        listSupply: _listSupply[auth.key]
-      });
-    }
-
-    uint128 cost = uint128(
-      ArchetypeLogicErc721a.computePrice(
-        i,
-        config.discounts,
-        args.quantity,
-        args.listSupply,
-        args.affiliate != address(0)
-      )
-    );
-
-    ArchetypeLogicErc721a.validateMint(i, config, auth, _minted, signature, args, cost);
-
-    _mint(to, quantity);
-
-    if (i.limit < i.maxSupply) {
-      _minted[_msgSender()][auth.key] += quantity;
-    }
-    if (i.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += quantity;
-    }
-
-    ArchetypeLogicErc721a.updateBalances(
-      i.tokenAddress,
       config,
       _ownerBalance,
       _affiliateBalance,
@@ -478,14 +449,7 @@ contract ArchetypeErc721a is
     bytes32 _cid,
     Invite calldata _invite
   ) external _onlyOwner {
-    // approve token for withdrawals if erc20 list
-    if (_invite.tokenAddress != address(0)) {
-      bool success = IERC20(_invite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
-      if (!success) {
-        revert NotApprovedToTransfer();
-      }
-    }
-    invites[_key] = AdvancedInvite({
+    setAdvancedInvite(_key, _cid, AdvancedInvite({
       price: _invite.price,
       reservePrice: _invite.price,
       delta: 0,
@@ -497,15 +461,14 @@ contract ArchetypeErc721a is
       unitSize: _invite.unitSize,
       tokenAddress: _invite.tokenAddress,
       isBlacklist: _invite.isBlacklist
-    });
-    emit Invited(_key, _cid);
+    }));
   }
 
   function setAdvancedInvite(
     bytes32 _key,
     bytes32 _cid,
     AdvancedInvite memory _AdvancedInvite
-  ) external _onlyOwner {
+  ) public _onlyOwner {
     // approve token for withdrawals if erc20 list
     if (_AdvancedInvite.tokenAddress != address(0)) {
       bool success = IERC20(_AdvancedInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
