@@ -13,7 +13,7 @@
 //                                                       Y8b d88P 888
 //                                                        "Y88P"  888
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import "../ArchetypePayouts.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -100,7 +100,7 @@ struct Options {
   bool airdropLocked;
 }
 
-struct DutchInvite {
+struct AdvancedInvite {
   uint128 price;
   uint128 reservePrice;
   uint128 delta;
@@ -158,7 +158,7 @@ library ArchetypeLogicErc1155Random {
 
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
-    DutchInvite storage invite,
+    AdvancedInvite storage invite,
     Discount storage discounts,
     uint256 numTokens,
     uint256 listSupply,
@@ -209,7 +209,7 @@ library ArchetypeLogicErc1155Random {
   }
 
   function validateMint(
-    DutchInvite storage i,
+    AdvancedInvite storage i,
     Config storage config,
     Auth calldata auth,
     mapping(address => mapping(bytes32 => uint256)) storage minted,
@@ -295,7 +295,7 @@ library ArchetypeLogicErc1155Random {
   }
 
   function updateBalances(
-    DutchInvite storage i,
+    AdvancedInvite storage i,
     Config storage config,
     mapping(address => uint128) storage _ownerBalance,
     mapping(address => mapping(address => uint128)) storage _affiliateBalance,

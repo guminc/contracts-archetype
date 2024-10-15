@@ -13,14 +13,14 @@
 //                                                  Y8b d88P
 //                                                   "Y88P"
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
-import "./ArchetypeBrg404.sol";
-import "./ArchetypeLogicBrg404.sol";
+import "./ArchetypeBurgers404.sol";
+import "./ArchetypeLogicBurgers404.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract FactoryBrg404 is Ownable {
+contract FactoryBurgers404 is Ownable {
   event CollectionAdded(address indexed sender, address indexed receiver, address collection);
   address public archetype;
 
@@ -28,7 +28,6 @@ contract FactoryBrg404 is Ownable {
     archetype = archetype_;
   }
 
-  /// @notice config is a struct in the shape of {string placeholder; string base; uint64 supply; bool permanent;}
   function createCollection(
     address _receiver,
     string memory name,
@@ -38,7 +37,7 @@ contract FactoryBrg404 is Ownable {
   ) external payable returns (address) {
     bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
     address clone = Clones.cloneDeterministic(archetype, salt);
-    ArchetypeBrg404 token = ArchetypeBrg404(payable(clone));
+    ArchetypeBurgers404 token = ArchetypeBurgers404(payable(clone));
     token.initialize(name, symbol, config, payoutConfig, _receiver);
 
     token.transferOwnership(_receiver);

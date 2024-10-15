@@ -4,14 +4,14 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
   const ArchetypeLogic = await ethers.getContractFactory(
-    "ArchetypeLogicBrg404"
+    "ArchetypeLogicBurgers404"
   );
   const archetypeLogic = await ArchetypeLogic.deploy();
   const archetypeLogicAddress = await archetypeLogic.getAddress();
 
-  const Archetype = await ethers.getContractFactory("ArchetypeBrg404", {
+  const Archetype = await ethers.getContractFactory("ArchetypeBurgers404", {
     libraries: {
-      ArchetypeLogicBrg404: archetypeLogicAddress,
+      ArchetypeLogicBurgers404: archetypeLogicAddress,
     },
   });
 
@@ -21,7 +21,7 @@ async function main() {
   console.log("Archetype Logic deployed to:", archetypeLogicAddress);
   console.log("Archetype deployed to:", archetypeAddress);
 
-  const Factory = await ethers.getContractFactory("FactoryBrg404");
+  const Factory = await ethers.getContractFactory("FactoryBurgers404");
 
   const factory = await Factory.deploy(archetypeAddress);
 

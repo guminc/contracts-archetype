@@ -1,7 +1,7 @@
 [
   {
-    "contractName": "ArchetypeLogicBrg404",
-    "contractPath": "contracts/BRG404/ArchetypeLogicBrg404.sol",
+    "contractName": "ArchetypeLogicBurgers404",
+    "contractPath": "contracts/BURGERS404/ArchetypeLogicBurgers404.sol",
     "missingLibraries": []
   },
   {
