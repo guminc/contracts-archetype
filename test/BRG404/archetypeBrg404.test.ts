@@ -2825,6 +2825,93 @@ describe("Factory", function () {
         .withdrawTokensFrom(owner.address, ownerAlt.address, [ZERO])
     ).to.be.revertedWithCustomError(archetypePayouts, "BalanceEmpty");
   });
+
+  it("test dn420 burn to remint", async function () {
+    const [accountZero, accountOne, accountTwo, accountThree] =
+      await ethers.getSigners();
+
+    const owner = accountOne;
+
+    let defaultConfig = DEFAULT_CONFIG;
+    defaultConfig.maxBatchSize = 5000 * ERC20RATIO;
+    defaultConfig.maxSupply = 5000 * ERC20RATIO;
+    const newCollection = await factory.createCollection(
+      owner.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      defaultConfig,
+      DEFAULT_PAYOUT_CONFIG
+    );
+
+    const result = await newCollection.wait();
+
+    const newCollectionAddress = result.logs[0].address || "";
+
+    const nft = ArchetypeBurgers404.attach(newCollectionAddress);
+
+    await sleep(1000);
+
+    const invitelist = new Invitelist([accountZero.address]);
+
+    const today = new Date();
+    const tomorrow = today.setDate(today.getDate() + 1);
+
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: 0,
+      start: 0,
+      end: 0,
+      limit: UINT32_MAX,
+      maxSupply: UINT32_MAX,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
+
+    await nft
+      .connect(accountZero)
+      .mint(
+        { key: ethers.ZeroHash, proof: [] },
+        5000 * ERC20RATIO,
+        ZERO,
+        "0x",
+        {
+          value: 0,
+        }
+      );
+
+    // minted up to token id 5000
+    expect(await balanceOfNFT(nft, accountZero.address, 1)).to.equal(1);
+    expect(await balanceOfNFT(nft, accountZero.address, 5000)).to.equal(1);
+
+    // burn to remint new token, this will burn both tokens and give back change
+    let prebalance = await nft.balanceOf(accountZero.address);
+    await nft.connect(accountZero).burnToRemint([1, 2]);
+    let postbalance = await nft.balanceOf(accountZero.address);
+
+    expect(await nft.owns(accountZero.address, 1)).to.equal(false);
+    expect(await nft.owns(accountZero.address, 2)).to.equal(false);
+    expect(await nft.owns(accountZero.address, 5001)).to.equal(true);
+    expect(postbalance - prebalance).to.equal(
+      -(BigInt(NFTUNIT) * BigInt(defaultConfig.remintPremium)) / BigInt(10000)
+    );
+
+    // burn to remint agains, will only transfer first token because change is there
+    prebalance = await nft.balanceOf(accountZero.address);
+    await nft.connect(accountZero).burnToRemint([8, 4]);
+    postbalance = await nft.balanceOf(accountZero.address);
+
+    expect(await nft.owns(accountZero.address, 8)).to.equal(false);
+    expect(await nft.owns(accountZero.address, 4)).to.equal(true);
+    expect(await nft.owns(accountZero.address, 5002)).to.equal(true);
+    expect(postbalance - prebalance).to.equal(
+      -(BigInt(NFTUNIT) * BigInt(defaultConfig.remintPremium)) / BigInt(10000)
+    );
+
+    // burn should have 3200 tokens now
+    expect(await nft.balanceOf(BURN)).to.equal(
+      BigInt(3200) * BigInt(ERC20UNIT)
+    );
+  });
 });
 
 // todo: add test to ensure affiliate signer can't be zero address

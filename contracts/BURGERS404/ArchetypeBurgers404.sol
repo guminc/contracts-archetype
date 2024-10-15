@@ -132,8 +132,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
       }
       quantity += quantityToAdd;
 
-      bytes memory _data;
-      _mintNext(toList[i], quantityToAdd * ERC20_UNIT, _data);
+      _mintNext(toList[i], quantityToAdd * ERC20_UNIT, "");
 
       unchecked {
         ++i;
@@ -157,8 +156,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     }
     uint256 curSupply = numErc20Minted();
 
-    bytes memory _data;
-    _mintNext(to, quantity * ERC20_UNIT, _data);
+    _mintNext(to, quantity * ERC20_UNIT, "");
 
     validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
   }
@@ -216,32 +214,33 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     }
   }
 
-  function burnToRemint(uint256 quantity, address to) public {
-    uint256 mintQuantity = quantity * _unit();
-    uint256 burnQuantity =  mintQuantity * (10000 + config.remintPremium) / 10000;
+  function burnToRemint(uint256[] calldata tokenIds) public {
+    if(tokenIds.length < 1) {
+      revert invalidTokenIdLength();
+    }
 
-    transferFrom(_msgSender(), 0x000000000000000000000000000000000000dEaD, burnQuantity);
+    address msgSender = _msgSender();
+    uint256 mintQuantity = 1 * _unit();
+    uint256 burnQuantity =  mintQuantity * config.remintPremium / 10000;
+    uint256 msgSenderBalance = balanceOf(msgSender);
+    uint256 change = 0;
 
-    bytes memory _data;
-    _mintNext(to, mintQuantity, _data);
-    
-  }
+    // transfer nft 1
+    safeTransferNFT(msgSender, 0x000000000000000000000000000000000000dEaD, tokenIds[0], "");
 
-  function name() public view override returns (string memory) {
-    return _name;
-  }
+    // if premium will make minter lose an nft, transfer nft 2 and give back change, otherwise just transfer erc20
+    if(msgSenderBalance % _unit() < burnQuantity) {
+      if(tokenIds.length < 2) {
+        revert invalidTokenIdLength();
+      }
+      _safeTransferNFT(msgSender, msgSender, 0x000000000000000000000000000000000000dEaD, tokenIds[1], "");
+      change += _unit() - burnQuantity;
+    } else {
+      _transfer(msgSender, 0x000000000000000000000000000000000000dEaD, burnQuantity, "");
+    }
 
-  function symbol() public view override returns (string memory) {
-    return _symbol;
-  }
-
-  function uri(uint256 tokenId) public view override returns (string memory) {
-    if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
-
-    return
-      bytes(config.baseUri).length != 0
-        ? string(abi.encodePacked(config.baseUri, LibString.toString(tokenId)))
-        : "";
+    // remint
+    _mintNext(msgSender, mintQuantity + change, "");
   }
 
   function withdraw() external {
@@ -320,6 +319,27 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
     return ArchetypeLogicBurgers404.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
+  }
+
+  //
+  // Overides
+  //
+
+  function name() public view override returns (string memory) {
+    return _name;
+  }
+
+  function symbol() public view override returns (string memory) {
+    return _symbol;
+  }
+
+  function uri(uint256 tokenId) public view override returns (string memory) {
+    if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
+
+    return
+      bytes(config.baseUri).length != 0
+        ? string(abi.encodePacked(config.baseUri, LibString.toString(tokenId)))
+        : "";
   }
 
   //

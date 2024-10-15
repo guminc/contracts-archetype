@@ -8,10 +8,10 @@ function asContractType<T extends BaseContract>(contract: any): T {
 }
 
 async function main() {
-  const Factory = await ethers.getContractFactory("FactoryErc721a");
+  const Factory = await ethers.getContractFactory("FactoryBurgers404");
 
   const factory = asContractType<FactoryBurgers404>(
-    Factory.attach("0x06daA4c7E143E46B95D8376CedCa5CCDf6d7136b")
+    Factory.attach("0xc1b131aD3166d328f8Eb54C3FCb6F7C1067f1825")
   );
   const factoryAddress = await factory.getAddress();
 
@@ -21,8 +21,8 @@ async function main() {
 
   const newContract = await factory.createCollection(
     accountZero.address,
-    "test brg 404",
-    "BRGs404",
+    "test burg 404",
+    "Burgers404",
     {
       baseUri:
         "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
@@ -53,43 +53,46 @@ async function main() {
   console.log({ result });
 
   const newCollectionAddress = result.logs[0].address || "";
-  console.log({ newCollectionAddress });
 
-  //   const ArchetypeLogic = await ethers.getContractFactory(
-  //     "ArchetypeLogicBurgers404"
-  //   );
-  //   const archetypeLogic = await ArchetypeLogic.attach(
-  //     "0x4cfe2b3522a223444cce2E5031EBC3EBe51115a8"
-  //   );
-  //   const Archetype = await ethers.getContractFactory("ArchetypeBurgers404", {
-  //     libraries: {
-  //       ArchetypeLogicErc721a: await archetypeLogic.getAddress(),
-  //     },
-  //   });
-  //   const archetype = asContractType<ArchetypeBurgers404>(
-  //     Archetype.attach(newCollectionAddress)
-  //   );
+  // const newCollectionAddress = "0xb8ac799Cd21fd4782EB3B720322d5B3d2fF282a3";
+  // console.log({ newCollectionAddress });
 
-  //   await archetype.setInvite(ethers.ZeroHash, ethers.ZeroHash, {
-  //     price: ethers.parseEther("0.001"),
-  //     start: 0,
-  //     end: 0,
-  //     limit: 2 ** 32 - 1,
-  //     maxSupply: 2 ** 32 - 1,
-  //     unitSize: 1,
-  //     tokenAddress: ethers.ZeroAddress,
-  //     isBlacklist: false,
-  //   });
+  // const ArchetypeLogic = await ethers.getContractFactory(
+  //   "ArchetypeLogicBurgers404"
+  // );
+  // const archetypeLogic = await ArchetypeLogic.attach(
+  //   "0xFAB3FF8A8F9364018AB8684502a872E7d0Cc7E22"
+  // );
+  // const Archetype = await ethers.getContractFactory("ArchetypeBurgers404", {
+  //   libraries: {
+  //     ArchetypeLogicBurgers404: await archetypeLogic.getAddress(),
+  //   },
+  // });
+  // const archetype = asContractType<ArchetypeBurgers404>(
+  //   Archetype.attach(newCollectionAddress)
+  // );
 
-  //   await archetype.mint(
-  //     { key: ethers.ZeroHash, proof: [] },
-  //     1,
-  //     ethers.ZeroAddress,
-  //     "0x",
-  //     {
-  //       value: ethers.parseEther("0.001"),
-  //     }
-  //   );
+  // await archetype.setInvite(ethers.ZeroHash, ethers.ZeroHash, {
+  //   price: ethers.parseEther("0.001") / BigInt(1000),
+  //   start: 0,
+  //   end: 0,
+  //   limit: 2 ** 32 - 1,
+  //   maxSupply: 2 ** 32 - 1,
+  //   unitSize: 1,
+  //   tokenAddress: ethers.ZeroAddress,
+  //   isBlacklist: false,
+  // });
+
+  // const res = await archetype.mint(
+  //   { key: ethers.ZeroHash, proof: [] },
+  //   10000,
+  //   ethers.ZeroAddress,
+  //   "0x",
+  //   {
+  //     value: (ethers.parseEther("0.001") / BigInt(1000)) * BigInt(10000),
+  //   }
+  // );
+  // console.log(res);
 
   // await sleep(1000 * 120);
 

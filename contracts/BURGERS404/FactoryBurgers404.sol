@@ -28,7 +28,6 @@ contract FactoryBurgers404 is Ownable {
     archetype = archetype_;
   }
 
-  /// @notice config is a struct in the shape of {string placeholder; string base; uint64 supply; bool permanent;}
   function createCollection(
     address _receiver,
     string memory name,

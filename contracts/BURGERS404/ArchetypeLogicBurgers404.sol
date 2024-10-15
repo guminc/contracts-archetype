@@ -44,6 +44,7 @@ error WrongPassword();
 error LockedForever();
 error Blacklisted();
 error URIQueryForNonexistentToken();
+error invalidTokenIdLength();
 
 //
 // STRUCTS
