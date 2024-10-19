@@ -33,7 +33,7 @@ async function main() {
       defaultRoyalty: 500,
       remintPremium: 2000,
       erc20Ratio: 1000,
-      discounts: { affiliateDiscount: 0, mintTiers: [] },
+      volumeDiscounts: { affiliateDiscount: 0, volumeTiers: [] },
     },
     {
       ownerBps: 9500,

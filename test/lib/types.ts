@@ -23,11 +23,11 @@ export type IArchetypeBurgers404Config = {
   defaultRoyalty: number;
   remintPremium: number;
   erc20Ratio: number;
-  discounts: {
+  volumeDiscounts: {
     affiliateDiscount: number;
-    mintTiers: {
+    volumeTiers: {
       numMints: number;
-      mintDiscount: number;
+      numFreeMints: number;
     }[];
   };
 };

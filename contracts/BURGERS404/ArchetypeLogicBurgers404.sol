@@ -45,6 +45,7 @@ error LockedForever();
 error Blacklisted();
 error URIQueryForNonexistentToken();
 error invalidTokenIdLength();
+error burnToRemintDisabled();
 
 //
 // STRUCTS
@@ -54,26 +55,26 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct MintTier {
-  uint16 numMints;
-  uint16 mintDiscount; //BPS
+struct VolumeBonusTier {
+  uint32 numMints;
+  uint32 numFreeMints;
 }
 
-struct Discount {
-  uint16 affiliateDiscount; //BPS
-  MintTier[] mintTiers;
+struct VolumeDiscount {
+  uint16 affiliateDiscount; // BPS
+  VolumeBonusTier[] volumeTiers;
 }
 
 struct Config {
   string baseUri;
   address affiliateSigner;
-  uint128 maxSupply; // in erc20
-  uint128 maxBatchSize; // in erc20
+  uint32 maxSupply; // in erc20
+  uint32 maxBatchSize; // in erc20
   uint16 affiliateFee; //BPS
   uint16 defaultRoyalty; //BPS
   uint16 remintPremium; //BPS premium for burning and reminting a new token
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
-  Discount discounts;
+  VolumeDiscount volumeDiscounts;
 }
 
 struct PayoutConfig {
@@ -98,8 +99,8 @@ struct AdvancedInvite {
   uint128 price; // in erc20
   uint128 reservePrice; // in erc20
   uint128 delta; // in erc20
-  uint128 maxSupply; // in erc20
-  uint128 limit; // in erc20
+  uint32 maxSupply; // in erc20
+  uint32 limit; // in erc20
   uint32 start;
   uint32 end;
   uint32 interval;
@@ -110,8 +111,8 @@ struct AdvancedInvite {
 
 struct Invite {
   uint128 price; 
-  uint128 maxSupply; // in erc20
-  uint128 limit; // in erc20
+  uint32 maxSupply; // in erc20
+  uint32 limit; // in erc20
   uint32 start;
   uint32 end;
   uint32 unitSize; // mint 1 get x
@@ -146,7 +147,7 @@ library ArchetypeLogicBurgers404 {
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
     AdvancedInvite storage invite,
-    Discount storage discounts,
+    VolumeDiscount storage volumeDiscounts,
     uint256 numTokens,
     uint256 listSupply,
     bool affiliateUsed
@@ -179,20 +180,21 @@ library ArchetypeLogicBurgers404 {
     }
 
     if (affiliateUsed) {
-      cost = cost - ((cost * discounts.affiliateDiscount) / 10000);
+      cost = cost - ((cost * volumeDiscounts.affiliateDiscount) / 10000);
     }
 
-    uint256 numMints = discounts.mintTiers.length;
-    for (uint256 i; i < numMints; ) {
-      uint256 tierNumMints = discounts.mintTiers[i].numMints;
-      if (numTokens >= tierNumMints) {
-        return cost - ((cost * discounts.mintTiers[i].mintDiscount) / 10000);
-      }
-      unchecked {
-        ++i;
+    return cost;
+  }
+
+  function freeMintsAwarded(uint256 numNfts, VolumeDiscount storage volumeDiscount) internal view returns (uint256){
+    uint256 numMints = volumeDiscount.volumeTiers.length;
+    for (uint16 i; i < numMints; i++ ) {
+      uint256 tierNumMints = volumeDiscount.volumeTiers[i].numMints;
+      if (numNfts >= tierNumMints) {
+        return volumeDiscount.volumeTiers[i].numFreeMints;
       }
     }
-    return cost;
+    return 0;
   }
 
   function validateMint(
