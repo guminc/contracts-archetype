@@ -13,7 +13,7 @@
 //                                                  Y8b d88P
 //                                                   "Y88P"
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import "./ArchetypeErc1155Random.sol";
 import "./ArchetypeLogicErc1155Random.sol";
@@ -28,7 +28,6 @@ contract FactoryErc1155Random is Ownable {
     archetype = archetype_;
   }
 
-  /// @notice config is a struct in the shape of {string placeholder; string base; uint64 supply; bool permanent;}
   function createCollection(
     address _receiver,
     string memory name,

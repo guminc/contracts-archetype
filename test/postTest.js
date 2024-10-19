@@ -30,11 +30,11 @@ fs.unlinkSync(erc1155RandomBackupFilePath);
 
 const brg404ContractPath = path.resolve(
   __dirname,
-  "../contracts/BRG404/ArchetypeLogicBrg404.sol"
+  "../contracts/BURGERS404/ArchetypeLogicBurgers404.sol"
 );
 const brg404BackupFilePath = path.resolve(
   __dirname,
-  "../contracts/BRG404/ArchetypeLogicBrg404.sol.bak"
+  "../contracts/BURGERS404/ArchetypeLogicBurgers404.sol.bak"
 );
 const brg404BackupFile = fs.readFileSync(brg404BackupFilePath, "utf8");
 fs.writeFileSync(brg404ContractPath, brg404BackupFile);

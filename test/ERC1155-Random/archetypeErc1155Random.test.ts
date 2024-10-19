@@ -514,10 +514,11 @@ describe("FactoryErc1155Random", function () {
         )
     ).to.be.revertedWithCustomError(archetypeLogic, "MintNotYetStarted");
 
+    const blockTimestamp = (await ethers.provider.getBlock("latest")).timestamp;
     await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
       price: ethers.parseEther("0.1"),
-      start: 0,
-      end: ethers.toBigInt(Math.floor(yesterday / 1000)),
+      start: ethers.toBigInt(blockTimestamp),
+      end: ethers.toBigInt(blockTimestamp + 10),
       limit: 1000,
       maxSupply: 5000,
       unitSize: 0,
@@ -525,6 +526,7 @@ describe("FactoryErc1155Random", function () {
       tokenAddress: ZERO,
     });
 
+    await ethers.provider.send("evm_increaseTime", [20]);
     // ended list rejectiong
     await expect(
       nft
@@ -1784,7 +1786,7 @@ describe("FactoryErc1155Random", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      .setAdvancedInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: ethers.parseEther("1"),
         reservePrice: ethers.parseEther("0.1"),
         start: 0,
@@ -1868,7 +1870,7 @@ describe("FactoryErc1155Random", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      .setAdvancedInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: ethers.parseEther("1"),
         reservePrice: ethers.parseEther("10"),
         start: 0,
@@ -1965,7 +1967,7 @@ describe("FactoryErc1155Random", function () {
 
     await nft
       .connect(owner)
-      .setDutchInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      .setAdvancedInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: ethers.parseEther("1"),
         reservePrice: ethers.parseEther("0.1"),
         start: 0,
@@ -3221,7 +3223,8 @@ describe("FactoryErc1155Random", function () {
       .mint({ key: ethers.ZeroHash, proof: [] }, 12, ZERO, "0x", seedHashFive, {
         value: 0,
       });
-    nftMint.fulfillRandomMint(seedFive, signatureFive);
+
+    await nftMint.fulfillRandomMint(seedFive, signatureFive);
 
     await expect(await nftMint.totalSupply()).to.be.equal(772);
     await expect(await nftMint.balanceOf(minter.address, 133)).to.be.equal(1);

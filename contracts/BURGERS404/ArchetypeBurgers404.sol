@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Archetype v0.8.0 - BRG404
+// Archetype v0.8.0 - BURGERS404
 //
 //        d8888                 888               888
 //       d88888                 888               888
@@ -13,15 +13,15 @@
 //                                                       Y8b d88P 888
 //                                                        "Y88P"  888
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
-import "./ArchetypeLogicBrg404.sol";
+import "./ArchetypeLogicBurgers404.sol";
 import "dn404/src/DN420.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "solady/src/utils/LibString.sol";
 import "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
-contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upgradeable {
+contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upgradeable {
   //
   // EVENTS
   //
@@ -32,7 +32,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   //
   // VARIABLES
   //
-  mapping(bytes32 => DutchInvite) public invites;
+  mapping(bytes32 => AdvancedInvite) public invites;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
   mapping(address => uint128) private _ownerBalance;
@@ -40,6 +40,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
 
   string private _name;
   string private _symbol;
+  uint256 private numErc20Mints;
   Config public config;
   PayoutConfig public payoutConfig;
   Options public options;
@@ -63,23 +64,11 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     // check max bps not reached and min platform fee.
     if (
       config_.affiliateFee > MAXBPS ||
-      config_.discounts.affiliateDiscount > MAXBPS ||
+      config_.volumeDiscounts.affiliateDiscount > MAXBPS ||
       config_.affiliateSigner == address(0) ||
       config_.maxBatchSize == 0
     ) {
       revert InvalidConfig();
-    }
-    // ensure mint tiers are correctly ordered from highest to lowest.
-    for (uint256 i = 1; i < config_.discounts.mintTiers.length; ) {
-      if (
-        config_.discounts.mintTiers[i].mintDiscount > MAXBPS ||
-        config_.discounts.mintTiers[i].numMints > config_.discounts.mintTiers[i - 1].numMints
-      ) {
-        revert InvalidConfig();
-      }
-      unchecked {
-        ++i;
-      }
     }
     __Ownable_init();
 
@@ -118,7 +107,8 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       revert InvalidConfig();
     }
 
-    DutchInvite storage invite = invites[auth.key];
+    AdvancedInvite storage invite = invites[auth.key];
+
     uint256 quantity;
 
     for (uint256 i; i < toList.length; ) {
@@ -130,36 +120,66 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       }
       quantity += quantityToAdd;
 
-      bytes memory _data;
-      _mintNext(toList[i], quantityToAdd * ERC20_UNIT, _data);
+      uint256 quantityToMint = quantityToAdd + ArchetypeLogicBurgers404.freeMintsAwarded(quantityToAdd / config.erc20Ratio, config.volumeDiscounts) * config.erc20Ratio;
+      _mintNext(toList[i], quantityToMint * ERC20_UNIT, "");
 
       unchecked {
         ++i;
       }
     }
 
+    validateAndCreditMint(invite, auth, quantity, numErc20Mints, affiliate, signature);
+  }
+
+  function mintTo(
+    Auth calldata auth,
+    uint256 quantity,
+    address to,
+    address affiliate,
+    bytes calldata signature
+  ) public payable {
+    AdvancedInvite storage invite = invites[auth.key];
+
+    if (invite.unitSize > 1) {
+      quantity = quantity * invite.unitSize;
+    }
+
+    uint256 quantityToMint = quantity + ArchetypeLogicBurgers404.freeMintsAwarded(quantity / config.erc20Ratio, config.volumeDiscounts) * config.erc20Ratio;
+    _mintNext(to, quantityToMint * ERC20_UNIT, "");
+
+    validateAndCreditMint(invite, auth, quantity, numErc20Mints, affiliate, signature);
+  }
+
+  function validateAndCreditMint(
+    AdvancedInvite storage invite,
+    Auth calldata auth,
+    uint256 quantity,
+    uint256 curSupply,
+    address affiliate,
+    bytes calldata signature
+  ) internal {
     ValidationArgs memory args;
     {
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
         quantity: quantity,
-        curSupply: numErc20Minted(),
+        curSupply: curSupply,
         listSupply: _listSupply[auth.key]
       });
     }
 
     uint128 cost = uint128(
-      ArchetypeLogicBrg404.computePrice(
+      ArchetypeLogicBurgers404.computePrice(
         invite,
-        config.discounts,
+        config.volumeDiscounts,
         args.quantity,
         args.listSupply,
         args.affiliate != address(0)
       )
     );
 
-    ArchetypeLogicBrg404.validateMint(invite, config, auth, _minted, signature, args, cost);
+    ArchetypeLogicBurgers404.validateMint(invite, config, auth, _minted, signature, args, cost);
 
     if (invite.limit < invite.maxSupply) {
       _minted[_msgSender()][auth.key] += quantity;
@@ -167,8 +187,9 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     if (invite.maxSupply < UINT32_MAX) {
       _listSupply[auth.key] += quantity;
     }
+    numErc20Mints += quantity;
 
-    ArchetypeLogicBrg404.updateBalances(
+    ArchetypeLogicBurgers404.updateBalances(
       invite,
       config,
       _ownerBalance,
@@ -183,82 +204,37 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     }
   }
 
-  function mintTo(
-    Auth calldata auth,
-    uint256 quantity,
-    address to,
-    address affiliate,
-    bytes calldata signature
-  ) public payable {
-    DutchInvite storage i = invites[auth.key];
-
-    if (i.unitSize > 1) {
-      quantity = quantity * i.unitSize;
+  function burnToRemint(uint256[] calldata tokenIds) public {
+    if(config.remintPremium == 0) {
+      revert burnToRemintDisabled();
     }
 
-    ValidationArgs memory args;
-    {
-      args = ValidationArgs({
-        owner: owner(),
-        affiliate: affiliate,
-        quantity: quantity,
-        curSupply: numErc20Minted(),
-        listSupply: _listSupply[auth.key]
-      });
+    if(tokenIds.length < 1) {
+      revert invalidTokenIdLength();
     }
 
-    uint128 cost = uint128(
-      ArchetypeLogicBrg404.computePrice(
-        i,
-        config.discounts,
-        args.quantity,
-        args.listSupply,
-        args.affiliate != address(0)
-      )
-    );
+    address msgSender = _msgSender();
+    uint256 mintQuantity = 1 * _unit();
+    uint256 burnQuantity =  mintQuantity * config.remintPremium / 10000;
+    uint256 msgSenderBalance = balanceOf(msgSender);
+    uint256 change = 0;
 
-    ArchetypeLogicBrg404.validateMint(i, config, auth, _minted, signature, args, cost);
+    // transfer nft 1
+    safeTransferNFT(msgSender, 0x000000000000000000000000000000000000dEaD, tokenIds[0], "");
 
-    bytes memory _data;
-    _mintNext(to, quantity * ERC20_UNIT, _data);
-
-    if (i.limit < i.maxSupply) {
-      _minted[_msgSender()][auth.key] += quantity;
-    }
-    if (i.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += quantity;
+    // if premium will make minter lose an nft, transfer nft 2 and give back change, otherwise just transfer erc20
+    if(msgSenderBalance % _unit() < burnQuantity) {
+      if(tokenIds.length < 2) {
+        revert invalidTokenIdLength();
+      }
+      _safeTransferNFT(msgSender, msgSender, 0x000000000000000000000000000000000000dEaD, tokenIds[1], "");
+      change += _unit() - burnQuantity;
+    } else {
+      _transfer(msgSender, 0x000000000000000000000000000000000000dEaD, burnQuantity, "");
     }
 
-    ArchetypeLogicBrg404.updateBalances(
-      i,
-      config,
-      _ownerBalance,
-      _affiliateBalance,
-      affiliate,
-      quantity,
-      cost
-    );
-
-    if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
-    }
-  }
-
-  function name() public view override returns (string memory) {
-    return _name;
-  }
-
-  function symbol() public view override returns (string memory) {
-    return _symbol;
-  }
-
-  function uri(uint256 tokenId) public view override returns (string memory) {
-    if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
-
-    return
-      bytes(config.baseUri).length != 0
-        ? string(abi.encodePacked(config.baseUri, LibString.toString(tokenId)))
-        : "";
+    // remint
+    _mintNext(msgSender, mintQuantity + change, "");
   }
 
   function withdraw() external {
@@ -268,7 +244,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   function withdrawTokens(address[] memory tokens) public {
-    ArchetypeLogicBrg404.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
+    ArchetypeLogicBurgers404.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
   }
 
   function withdrawAffiliate() external {
@@ -278,7 +254,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   function withdrawTokensAffiliate(address[] memory tokens) public {
-    ArchetypeLogicBrg404.withdrawTokensAffiliate(_affiliateBalance, tokens);
+    ArchetypeLogicBurgers404.withdrawTokensAffiliate(_affiliateBalance, tokens);
   }
 
   function ownerBalance() external view returns (uint128) {
@@ -306,12 +282,24 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   function numErc20Minted() public view returns (uint256) {
-    return totalSupply() / ERC20_UNIT;
+    return numErc20Mints;
   }
 
   function numNftsMinted() public view returns (uint256) {
-    return totalSupply() / _unit();
+    return numErc20Mints / config.erc20Ratio;
   }
+
+  function balanceOfNFT(address owner) public view returns (uint256) {
+    return _balanceOfNFT(owner);
+  }
+
+  function exists(uint256 id) external view returns (bool) {
+    return _exists(id);
+  }
+
+  // function findOwnedIds(address owner, uint256 lower, uint256 upper) external view returns (uint256[] memory ids){
+  //   return _findOwnedIds(owner, lower, upper);
+  // }
 
   function platform() external pure returns (address) {
     return PLATFORM;
@@ -322,9 +310,30 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     uint256 quantity,
     bool affiliateUsed
   ) external view returns (uint256) {
-    DutchInvite storage i = invites[key];
+    AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicBrg404.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
+    return ArchetypeLogicBurgers404.computePrice(i, config.volumeDiscounts, quantity, listSupply_, affiliateUsed);
+  }
+
+  //
+  // Overides
+  //
+
+  function name() public view override returns (string memory) {
+    return _name;
+  }
+
+  function symbol() public view override returns (string memory) {
+    return _symbol;
+  }
+
+  function uri(uint256 tokenId) public view override returns (string memory) {
+    if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
+
+    return
+      bytes(config.baseUri).length != 0
+        ? string(abi.encodePacked(config.baseUri, LibString.toString(tokenId)))
+        : "";
   }
 
   //
@@ -349,7 +358,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
   }
 
   // max supply cannot subceed total supply. Be careful changing.
-  function setMaxSupply(uint128 maxSupply) external _onlyOwner {
+  function setMaxSupply(uint32 maxSupply) external _onlyOwner {
     if (options.maxSupplyLocked) {
       revert LockedForever();
     }
@@ -385,37 +394,40 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     options.affiliateFeeLocked = true;
   }
 
-  // function setDiscounts(Discount calldata discounts) external _onlyOwner {
-  //   if (options.discountsLocked) {
-  //     revert LockedForever();
-  //   }
+  function setDiscounts(VolumeDiscount calldata volumeDiscounts) external _onlyOwner {
+    if (options.discountsLocked) {
+      revert LockedForever();
+    }
 
-  //   if (discounts.affiliateDiscount > MAXBPS) {
-  //     revert InvalidConfig();
-  //   }
+    if (volumeDiscounts.affiliateDiscount > MAXBPS) {
+      revert InvalidConfig();
+    }
 
-  //   // ensure mint tiers are correctly ordered from highest to lowest.
-  //   for (uint256 i = 1; i < discounts.mintTiers.length; ) {
-  //     if (
-  //       discounts.mintTiers[i].mintDiscount > MAXBPS ||
-  //       discounts.mintTiers[i].numMints > discounts.mintTiers[i - 1].numMints
-  //     ) {
-  //       revert InvalidConfig();
-  //     }
-  //     unchecked {
-  //       ++i;
-  //     }
-  //   }
-
-  //   config.discounts = discounts;
-  // }
+    config.volumeDiscounts = volumeDiscounts;
+  }
 
   function lockDiscounts() external _onlyOwner {
     options.discountsLocked = true;
   }
 
+  function setOwnerAltPayout(address ownerAltPayout) external _onlyOwner {
+    if (options.ownerAltPayoutLocked) {
+      revert LockedForever();
+    }
+
+    payoutConfig.ownerAltPayout = ownerAltPayout;
+  }
+
+  function lockOwnerAltPayout() external _onlyOwner {
+    options.ownerAltPayoutLocked = true;
+  }
+
   function setMaxBatchSize(uint32 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
+  }
+
+  function setRemintPremium(uint16 remintPremium) external _onlyOwner {
+    config.remintPremium = remintPremium;
   }
 
   function setInvite(
@@ -423,14 +435,7 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
     bytes32 _cid,
     Invite calldata _invite
   ) external _onlyOwner {
-    // approve token for withdrawals if erc20 list
-    if (_invite.tokenAddress != address(0)) {
-      bool success = IERC20(_invite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
-      if (!success) {
-        revert NotApprovedToTransfer();
-      }
-    }
-    invites[_key] = DutchInvite({
+    setAdvancedInvite(_key, _cid, AdvancedInvite({
       price: _invite.price,
       reservePrice: _invite.price,
       delta: 0,
@@ -442,26 +447,25 @@ contract ArchetypeBrg404 is DN420, Initializable, OwnableUpgradeable, ERC2981Upg
       unitSize: _invite.unitSize,
       tokenAddress: _invite.tokenAddress,
       isBlacklist: _invite.isBlacklist
-    });
-    emit Invited(_key, _cid);
+    }));
   }
 
-  function setDutchInvite(
+  function setAdvancedInvite(
     bytes32 _key,
     bytes32 _cid,
-    DutchInvite memory _dutchInvite
-  ) external _onlyOwner {
+    AdvancedInvite memory _AdvancedInvite
+  ) public _onlyOwner {
     // approve token for withdrawals if erc20 list
-    if (_dutchInvite.tokenAddress != address(0)) {
-      bool success = IERC20(_dutchInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
+    if (_AdvancedInvite.tokenAddress != address(0)) {
+      bool success = IERC20(_AdvancedInvite.tokenAddress).approve(PAYOUTS, 2**256 - 1);
       if (!success) {
         revert NotApprovedToTransfer();
       }
     }
-    if (_dutchInvite.start < block.timestamp) {
-      _dutchInvite.start = uint32(block.timestamp);
+    if (_AdvancedInvite.start < block.timestamp) {
+      _AdvancedInvite.start = uint32(block.timestamp);
     }
-    invites[_key] = _dutchInvite;
+    invites[_key] = _AdvancedInvite;
     emit Invited(_key, _cid);
   }
 

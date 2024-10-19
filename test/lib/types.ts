@@ -14,19 +14,20 @@ export type IArchetypeErc721aConfig = {
   };
 };
 
-export type IArchetypeBrg404Config = {
+export type IArchetypeBurgers404Config = {
   baseUri: string;
   affiliateSigner: string;
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
   defaultRoyalty: number;
+  remintPremium: number;
   erc20Ratio: number;
-  discounts: {
+  volumeDiscounts: {
     affiliateDiscount: number;
-    mintTiers: {
+    volumeTiers: {
       numMints: number;
-      mintDiscount: number;
+      numFreeMints: number;
     }[];
   };
 };

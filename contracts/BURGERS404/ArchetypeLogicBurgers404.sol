@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ArchetypeLogic v0.8.0 - BRG404
+// ArchetypeLogic v0.8.0 - BURGERS404
 //
 //        d8888                 888               888
 //       d88888                 888               888
@@ -13,7 +13,7 @@
 //                                                       Y8b d88P 888
 //                                                        "Y88P"  888
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
 import "../ArchetypePayouts.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -44,6 +44,8 @@ error WrongPassword();
 error LockedForever();
 error Blacklisted();
 error URIQueryForNonexistentToken();
+error invalidTokenIdLength();
+error burnToRemintDisabled();
 
 //
 // STRUCTS
@@ -53,25 +55,26 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct MintTier {
-  uint16 numMints;
-  uint16 mintDiscount; //BPS
+struct VolumeBonusTier {
+  uint32 numMints;
+  uint32 numFreeMints;
 }
 
-struct Discount {
-  uint16 affiliateDiscount; //BPS
-  MintTier[] mintTiers;
+struct VolumeDiscount {
+  uint16 affiliateDiscount; // BPS
+  VolumeBonusTier[] volumeTiers;
 }
 
 struct Config {
   string baseUri;
   address affiliateSigner;
-  uint128 maxSupply; // in erc20
-  uint128 maxBatchSize; // in erc20
+  uint32 maxSupply; // in erc20
+  uint32 maxBatchSize; // in erc20
   uint16 affiliateFee; //BPS
   uint16 defaultRoyalty; //BPS
+  uint16 remintPremium; //BPS premium for burning and reminting a new token
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
-  Discount discounts;
+  VolumeDiscount volumeDiscounts;
 }
 
 struct PayoutConfig {
@@ -81,6 +84,7 @@ struct PayoutConfig {
   uint16 superAffiliateBps;
   address partner;
   address superAffiliate;
+  address ownerAltPayout;
 }
 
 struct Options {
@@ -91,12 +95,12 @@ struct Options {
   bool ownerAltPayoutLocked;
 }
 
-struct DutchInvite {
+struct AdvancedInvite {
   uint128 price; // in erc20
   uint128 reservePrice; // in erc20
   uint128 delta; // in erc20
-  uint128 maxSupply; // in erc20
-  uint128 limit; // in erc20
+  uint32 maxSupply; // in erc20
+  uint32 limit; // in erc20
   uint32 start;
   uint32 end;
   uint32 interval;
@@ -107,8 +111,8 @@ struct DutchInvite {
 
 struct Invite {
   uint128 price; 
-  uint128 maxSupply; // in erc20
-  uint128 limit; // in erc20
+  uint32 maxSupply; // in erc20
+  uint32 limit; // in erc20
   uint32 start;
   uint32 end;
   uint32 unitSize; // mint 1 get x
@@ -132,7 +136,7 @@ uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 uint256 constant ERC20_UNIT = 10 ** 18;
 
-library ArchetypeLogicBrg404 {
+library ArchetypeLogicBurgers404 {
   //
   // EVENTS
   //
@@ -142,8 +146,8 @@ library ArchetypeLogicBrg404 {
 
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
-    DutchInvite storage invite,
-    Discount storage discounts,
+    AdvancedInvite storage invite,
+    VolumeDiscount storage volumeDiscounts,
     uint256 numTokens,
     uint256 listSupply,
     bool affiliateUsed
@@ -176,24 +180,25 @@ library ArchetypeLogicBrg404 {
     }
 
     if (affiliateUsed) {
-      cost = cost - ((cost * discounts.affiliateDiscount) / 10000);
+      cost = cost - ((cost * volumeDiscounts.affiliateDiscount) / 10000);
     }
 
-    uint256 numMints = discounts.mintTiers.length;
-    for (uint256 i; i < numMints; ) {
-      uint256 tierNumMints = discounts.mintTiers[i].numMints;
-      if (numTokens >= tierNumMints) {
-        return cost - ((cost * discounts.mintTiers[i].mintDiscount) / 10000);
-      }
-      unchecked {
-        ++i;
-      }
-    }
     return cost;
   }
 
+  function freeMintsAwarded(uint256 numNfts, VolumeDiscount storage volumeDiscount) internal view returns (uint256){
+    uint256 numMints = volumeDiscount.volumeTiers.length;
+    for (uint16 i; i < numMints; i++ ) {
+      uint256 tierNumMints = volumeDiscount.volumeTiers[i].numMints;
+      if (numNfts >= tierNumMints) {
+        return volumeDiscount.volumeTiers[i].numFreeMints;
+      }
+    }
+    return 0;
+  }
+
   function validateMint(
-    DutchInvite storage i,
+    AdvancedInvite storage i,
     Config storage config,
     Auth calldata auth,
     mapping(address => mapping(bytes32 => uint256)) storage minted,
@@ -277,7 +282,7 @@ library ArchetypeLogicBrg404 {
   }
 
   function updateBalances(
-    DutchInvite storage i,
+    AdvancedInvite storage i,
     Config storage config,
     mapping(address => uint128) storage _ownerBalance,
     mapping(address => mapping(address => uint128)) storage _affiliateBalance,
@@ -355,7 +360,8 @@ library ArchetypeLogicBrg404 {
         msgSender == owner ||
         msgSender == PLATFORM ||
         msgSender == payoutConfig.partner ||
-        msgSender == payoutConfig.superAffiliate
+        msgSender == payoutConfig.superAffiliate ||
+        msgSender == payoutConfig.ownerAltPayout
       ) {
         wad = _ownerBalance[tokenAddress];
         _ownerBalance[tokenAddress] = 0;
@@ -367,31 +373,71 @@ library ArchetypeLogicBrg404 {
         revert BalanceEmpty();
       }
 
-      address[] memory recipients = new address[](4);
-      recipients[0] = owner;
-      recipients[1] = PLATFORM;
-      recipients[2] = payoutConfig.partner;
-      recipients[3] = payoutConfig.superAffiliate;
+      if (payoutConfig.ownerAltPayout == address(0)) {
+        address[] memory recipients = new address[](4);
+        recipients[0] = owner;
+        recipients[1] = PLATFORM;
+        recipients[2] = payoutConfig.partner;
+        recipients[3] = payoutConfig.superAffiliate;
 
-      uint16[] memory splits = new uint16[](4);
-      splits[0] = payoutConfig.ownerBps;
-      splits[1] = payoutConfig.platformBps;
-      splits[2] = payoutConfig.partnerBps;
-      splits[3] = payoutConfig.superAffiliateBps;
+        uint16[] memory splits = new uint16[](4);
+        splits[0] = payoutConfig.ownerBps;
+        splits[1] = payoutConfig.platformBps;
+        splits[2] = payoutConfig.partnerBps;
+        splits[3] = payoutConfig.superAffiliateBps;
 
-      if (tokenAddress == address(0)) {
-        ArchetypePayouts(PAYOUTS).updateBalances{ value: wad }(
-          wad,
-          tokenAddress,
-          recipients,
-          splits
-        );
+        if (tokenAddress == address(0)) {
+          ArchetypePayouts(PAYOUTS).updateBalances{ value: wad }(
+            wad,
+            tokenAddress,
+            recipients,
+            splits
+          );
+        } else {
+          ArchetypePayouts(PAYOUTS).updateBalances(wad, tokenAddress, recipients, splits);
+        }
       } else {
-        ArchetypePayouts(PAYOUTS).updateBalances(wad, tokenAddress, recipients, splits);
+        uint256 ownerShare = (uint256(wad) * payoutConfig.ownerBps) / 10000;
+        uint256 remainingShare = wad - ownerShare;
+
+        if (tokenAddress == address(0)) {
+          (bool success, ) = payable(payoutConfig.ownerAltPayout).call{ value: ownerShare }("");
+          if (!success) revert TransferFailed();
+        } else {
+          IERC20(tokenAddress).transfer(payoutConfig.ownerAltPayout, ownerShare);
+        }
+
+        address[] memory recipients = new address[](3);
+        recipients[0] = PLATFORM;
+        recipients[1] = payoutConfig.partner;
+        recipients[2] = payoutConfig.superAffiliate;
+
+        uint16[] memory splits = new uint16[](3);
+        uint16 remainingBps = 10000 - payoutConfig.ownerBps;
+        splits[1] = uint16((uint256(payoutConfig.partnerBps) * 10000) / remainingBps);
+        splits[2] = uint16((uint256(payoutConfig.superAffiliateBps) * 10000) / remainingBps);
+        splits[0] = 10000 - splits[1] - splits[2];
+
+        if (tokenAddress == address(0)) {
+          ArchetypePayouts(PAYOUTS).updateBalances{ value: remainingShare }(
+            remainingShare,
+            tokenAddress,
+            recipients,
+            splits
+          );
+        } else {
+          ArchetypePayouts(PAYOUTS).updateBalances(
+            remainingShare,
+            tokenAddress,
+            recipients,
+            splits
+          );
+        }
       }
       emit Withdrawal(msgSender, tokenAddress, wad);
     }
   }
+
 
   function validateAffiliate(
     address affiliate,

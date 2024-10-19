@@ -6,6 +6,7 @@ import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@matterlabs/hardhat-zksync";
 import "@matterlabs/hardhat-zksync-deploy";
+import "hardhat-gas-reporter";
 require("hardhat-contract-sizer");
 
 dotenv.config();
@@ -104,8 +105,9 @@ const config: HardhatUserConfig = {
           ArchetypeLogicErc1155Random:
             "0x0000000000000000000000000000000000000000", // update
         },
-        "contracts/BRG404/ArchetypeLogicBrg404.sol": {
-          ArchetypeLogicBrg404: "0x0000000000000000000000000000000000000000", // update
+        "contracts/BURGERS404/ArchetypeLogicBurgers404.sol": {
+          ArchetypeLogicBurgers404:
+            "0x0000000000000000000000000000000000000000", // update
         },
       },
     },
@@ -115,7 +117,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1,
       },
     },
   },
