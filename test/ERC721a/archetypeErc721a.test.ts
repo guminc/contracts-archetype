@@ -58,15 +58,8 @@ describe("FactoryErc721a", function () {
       maxSupply: 5000,
       maxBatchSize: 20,
       affiliateFee: 1500,
+      affiliateDiscount: 0,
       defaultRoyalty: 500,
-      discounts: {
-        affiliateDiscount: 0,
-        mintTiers: [],
-        // [{
-        //   numMints: number;
-        //   mintDiscount: number;
-        // }];
-      },
     };
     DEFAULT_PAYOUT_CONFIG = {
       ownerBps: 9500,
@@ -703,26 +696,10 @@ describe("FactoryErc721a", function () {
           "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
         affiliateSigner: AFFILIATE_SIGNER.address,
         maxSupply: 5000,
-        maxBatchSize: 20,
+        maxBatchSize: 100,
         affiliateFee: 1500,
+        affiliateDiscount: 1000,
         defaultRoyalty: 500,
-        discounts: {
-          affiliateDiscount: 1000, // 10%
-          mintTiers: [
-            {
-              numMints: 100,
-              mintDiscount: 2000, // 20%
-            },
-            {
-              numMints: 20,
-              mintDiscount: 1000, // 10%
-            },
-            {
-              numMints: 5,
-              mintDiscount: 500, // 5%
-            },
-          ],
-        },
       },
       DEFAULT_PAYOUT_CONFIG
     );
@@ -733,16 +710,37 @@ describe("FactoryErc721a", function () {
 
     const nft = ArchetypeErc721a.attach(newCollectionAddress);
 
-    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
-      price: ethers.parseEther("0.1"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-      end: 0,
-      limit: 300,
-      maxSupply: DEFAULT_CONFIG.maxSupply,
-      unitSize: 0,
-      tokenAddress: ZERO,
-      isBlacklist: false,
-    });
+    await nft.connect(owner).setBonusInvite(
+      ethers.ZeroHash,
+      ipfsh.ctod(CID_ZERO),
+      {
+        price: ethers.parseEther("0.01"),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+        end: 0,
+        limit: 300,
+        maxSupply: DEFAULT_CONFIG.maxSupply,
+        unitSize: 0,
+        tokenAddress: ZERO,
+        isBlacklist: false,
+        reservePrice: 0,
+        delta: 0,
+        interval: 0,
+      },
+      [
+        {
+          numMints: 20,
+          numBonusMints: 10,
+        },
+        {
+          numMints: 10,
+          numBonusMints: 4,
+        },
+        {
+          numMints: 3,
+          numBonusMints: 1,
+        },
+      ]
+    );
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -751,49 +749,53 @@ describe("FactoryErc721a", function () {
       )
     );
 
+    // mint 3 nfts should get one free
     await nft
       .connect(accountZero)
       .mint(
         { key: ethers.ZeroHash, proof: [] },
-        1,
+        3,
         affiliate.address,
         referral,
         {
-          value: ethers.parseEther("0.09"), // 10 % discount from using an affiliate = 0.9
+          value: ethers.parseEther("0.009") * BigInt(3), // affiliate discount
         }
       );
 
-    await expect(await nft.ownerBalance()).to.equal(
-      ethers.parseEther("0.0765")
-    ); // 85%
-    await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.parseEther("0.0135")
-    ); // 15%
-
-    // reset balances by withdrawing
-    await nft.connect(platform).withdraw();
-    await nft.connect(affiliate).withdrawAffiliate();
-
-    await nft
-      .connect(accountZero)
-      .mint(
-        { key: ethers.ZeroHash, proof: [] },
-        20,
-        affiliate.address,
-        referral,
-        {
-          value: ethers.parseEther((0.081 * 20).toString()), // 10 % discount from using an affiliate, additional 10% for minting 20 = 0.081 per
-        }
-      );
-
-    await expect(await nft.computePrice(ethers.ZeroHash, 20, true)).to.equal(
-      ethers.parseEther((0.081 * 20).toString())
+    expect(await nft.connect(accountZero).ownerOf(4)).to.equal(
+      accountZero.address
     );
+    expect(await nft.connect(accountZero).totalSupply()).to.equal(4);
 
-    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("1.377")); // 85%
-    await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.parseEther("0.243")
-    ); // 15%
+    // mint 8 nfts should get one free
+    await nft
+      .connect(accountZero)
+      .mint(
+        { key: ethers.ZeroHash, proof: [] },
+        8,
+        ethers.ZeroAddress,
+        ethers.ZeroHash,
+        {
+          value: ethers.parseEther("0.01") * BigInt(8),
+        }
+      );
+
+    expect(await nft.connect(accountZero).totalSupply()).to.equal(4 + 9);
+
+    // mint 21 nfts should get ten free
+    await nft
+      .connect(accountZero)
+      .mint(
+        { key: ethers.ZeroHash, proof: [] },
+        21,
+        ethers.ZeroAddress,
+        ethers.ZeroHash,
+        {
+          value: ethers.parseEther("0.01") * BigInt(21),
+        }
+      );
+
+    expect(await nft.connect(accountZero).totalSupply()).to.equal(4 + 9 + 31);
   });
 
   it("should withdraw and credit correct amount - super affiliate", async function () {
@@ -817,11 +819,8 @@ describe("FactoryErc721a", function () {
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
-        discounts: {
-          affiliateDiscount: 0,
-          mintTiers: [],
-        },
       },
       // DEFAULT_PAYOUT_CONFIG
       {
@@ -943,11 +942,8 @@ describe("FactoryErc721a", function () {
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
-        discounts: {
-          affiliateDiscount: 0, // 10%
-          mintTiers: [],
-        },
       },
       {
         ownerBps: 9000,
@@ -1135,6 +1131,13 @@ describe("FactoryErc721a", function () {
     await expect((await nft.connect(owner).config()).affiliateFee).to.be.equal(
       1000
     );
+    // CHANGE AFFILIATE DISCOUNT
+    await nft.connect(owner).setAffiliateDiscount(1000);
+    await expect(
+      (
+        await nft.connect(owner).config()
+      ).affiliateDiscount
+    ).to.be.equal(1000);
     await nft.connect(owner).lockAffiliateFee("forever");
     await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
 
@@ -1148,31 +1151,6 @@ describe("FactoryErc721a", function () {
     await nft.connect(owner).lockOwnerAltPayout();
     await expect(nft.connect(owner).setOwnerAltPayout(alt.address)).to.be
       .reverted;
-
-    // CHANGE DISCOUNTS
-    const discount = {
-      affiliateDiscount: 2000,
-      mintTiers: [
-        {
-          numMints: 10,
-          mintDiscount: 2000,
-        },
-        {
-          numMints: 5,
-          mintDiscount: 1000,
-        },
-      ],
-    };
-    await nft.connect(owner).setDiscounts(discount);
-    const _discount = Object.values(discount);
-    discount.mintTiers.forEach((obj, i) => {
-      _discount[1][i] = Object.values(obj);
-    });
-    await expect((await nft.connect(owner).config()).discounts).to.deep.equal(
-      _discount
-    );
-    await nft.connect(owner).lockDiscounts("forever");
-    await expect(nft.connect(owner).setDiscounts(discount)).to.be.reverted;
   });
 
   it("test burn to mint functionality", async function () {
@@ -1569,10 +1547,34 @@ describe("FactoryErc721a", function () {
         })
     ).to.be.revertedWithCustomError(archetypeLogic, "MaxSupplyExceeded");
 
-    // mint max tokens
+    // mint max tokens -1
     await nftMint
       .connect(minter)
-      .mint({ key: ethers.ZeroHash, proof: [] }, 4990, ZERO, "0x", {
+      .mint({ key: ethers.ZeroHash, proof: [] }, 4989, ZERO, "0x", {
+        value: 0,
+      });
+
+    // make sure free mints are counted in max supply
+    await nftMint.setBonusDiscounts(ethers.ZeroHash, [
+      { numMints: 1, numBonusMints: 1 },
+    ]);
+
+    // free mint will make max supply exceed
+    await expect(
+      nftMint
+        .connect(minter)
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
+          value: 0,
+        })
+    ).to.be.revertedWithCustomError(archetypeLogic, "MaxSupplyExceeded");
+
+    await nftMint.setBonusDiscounts(ethers.ZeroHash, [
+      { numMints: 0, numBonusMints: 0 },
+    ]);
+
+    nftMint
+      .connect(minter)
+      .mint({ key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", {
         value: 0,
       });
 

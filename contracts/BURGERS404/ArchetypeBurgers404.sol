@@ -33,7 +33,6 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   // VARIABLES
   //
   mapping(bytes32 => AdvancedInvite) public invites;
-  // Up to 8 discount tiers: [discount7][discount6][discount5][discount4][discount3][discount2][discount1][discount0]
   mapping(bytes32 => uint256) public packedBonusDiscounts;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
@@ -434,6 +433,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     config.remintPremium = remintPremium;
   }
 
+  // Up to 8 discount tiers: [discount7][discount6][discount5][discount4][discount3][discount2][discount1][discount0]
   function setBonusDiscounts(bytes32 _key, BonusDiscount[] calldata _bonusDiscounts) public onlyOwner {
       if(_bonusDiscounts.length > 8) {
         revert InvalidConfig();

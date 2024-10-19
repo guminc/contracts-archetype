@@ -4,14 +4,8 @@ export type IArchetypeErc721aConfig = {
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
+  affiliateDiscount: number;
   defaultRoyalty: number;
-  discounts: {
-    affiliateDiscount: number;
-    mintTiers: {
-      numMints: number;
-      mintDiscount: number;
-    }[];
-  };
 };
 
 export type IArchetypeBurgers404Config = {

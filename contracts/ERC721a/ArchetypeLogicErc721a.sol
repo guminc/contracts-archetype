@@ -54,14 +54,9 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct MintTier {
+struct BonusDiscount {
   uint16 numMints;
-  uint16 mintDiscount; //BPS
-}
-
-struct Discount {
-  uint16 affiliateDiscount; //BPS
-  MintTier[] mintTiers;
+  uint16 numBonusMints;
 }
 
 struct Config {
@@ -70,8 +65,8 @@ struct Config {
   uint32 maxSupply;
   uint32 maxBatchSize;
   uint16 affiliateFee; //BPS
+  uint16 affiliateDiscount; //BPS
   uint16 defaultRoyalty; //BPS
-  Discount discounts;
 }
 
 // allocation splits for withdrawn owner funds, must sum to 100%
@@ -89,7 +84,6 @@ struct Options {
   bool uriLocked;
   bool maxSupplyLocked;
   bool affiliateFeeLocked;
-  bool discountsLocked;
   bool ownerAltPayoutLocked;
 }
 
@@ -157,7 +151,7 @@ library ArchetypeLogicErc721a {
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
     AdvancedInvite storage invite,
-    Discount storage discounts,
+    uint16 affiliateDiscount,
     uint256 numTokens,
     uint256 listSupply,
     bool affiliateUsed
@@ -190,20 +184,27 @@ library ArchetypeLogicErc721a {
     }
 
     if (affiliateUsed) {
-      cost = cost - ((cost * discounts.affiliateDiscount) / 10000);
+      cost = cost - ((cost * affiliateDiscount) / 10000);
     }
 
-    uint256 numMints = discounts.mintTiers.length;
-    for (uint256 i; i < numMints; ) {
-      uint256 tierNumMints = discounts.mintTiers[i].numMints;
-      if (numTokens >= tierNumMints) {
-        return cost - ((cost * discounts.mintTiers[i].mintDiscount) / 10000);
-      }
-      unchecked {
-        ++i;
-      }
-    }
     return cost;
+  }
+
+  function bonusMintsAwarded(uint256 numNfts, uint256 packedDiscount) internal pure returns (uint256) {
+    for (uint8 i = 0; i < 8; i++) {
+        uint32 discount = uint32((packedDiscount >> (32 * i)) & 0xFFFFFFFF);
+        uint16 tierNumMints = uint16(discount >> 16);
+        uint16 tierBonusMints = uint16(discount);
+
+        if (tierNumMints == 0) {
+            break; // End of valid discounts
+        }
+
+        if (numNfts >= tierNumMints) {
+            return tierBonusMints;
+        }
+    }
+    return 0;
   }
 
   function validateMint(
