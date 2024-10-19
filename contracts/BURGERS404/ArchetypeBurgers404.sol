@@ -33,6 +33,8 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   // VARIABLES
   //
   mapping(bytes32 => AdvancedInvite) public invites;
+  // Up to 8 discount tiers: [discount7][discount6][discount5][discount4][discount3][discount2][discount1][discount0]
+  mapping(bytes32 => uint256) public packedBonusDiscounts;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
   mapping(address => uint128) private _ownerBalance;
@@ -108,6 +110,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     }
 
     AdvancedInvite storage invite = invites[auth.key];
+    uint256 packedDiscount = packedBonusDiscounts[auth.key];
 
     uint256 totalQuantity;
     uint256 totalBonusMints;
@@ -120,7 +123,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
         quantityToAdd = quantityList[i];
       }
 
-      uint256 numBonusMints = ArchetypeLogicBurgers404.bonusMintsAwarded(quantityToAdd / config.erc20Ratio, config.bonusDiscounts) * config.erc20Ratio;
+      uint256 numBonusMints = ArchetypeLogicBurgers404.bonusMintsAwarded(quantityToAdd / config.erc20Ratio, packedDiscount) * config.erc20Ratio;
       _mintNext(toList[i], (quantityToAdd + numBonusMints) * ERC20_UNIT, "");
 
       totalQuantity += quantityToAdd;
@@ -142,12 +145,13 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     bytes calldata signature
   ) public payable {
     AdvancedInvite storage invite = invites[auth.key];
+    uint256 packedDiscount = packedBonusDiscounts[auth.key];
 
     if (invite.unitSize > 1) {
       quantity = quantity * invite.unitSize;
     }
 
-    uint256 numBonusMints = ArchetypeLogicBurgers404.bonusMintsAwarded(quantity / config.erc20Ratio, config.bonusDiscounts) * config.erc20Ratio;
+    uint256 numBonusMints = ArchetypeLogicBurgers404.bonusMintsAwarded(quantity / config.erc20Ratio, packedDiscount) * config.erc20Ratio;
     _mintNext(to, (quantity + numBonusMints) * ERC20_UNIT, "");
 
     validateAndCreditMint(invite, auth, quantity, numBonusMints, totalErc20Mints, affiliate, signature);
@@ -410,18 +414,6 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     options.affiliateFeeLocked = true;
   }
 
-  function setDiscounts(BonusDiscount calldata bonusDiscounts) external _onlyOwner {
-    if (options.discountsLocked) {
-      revert LockedForever();
-    }
-
-    config.bonusDiscounts = bonusDiscounts;
-  }
-
-  function lockDiscounts() external _onlyOwner {
-    options.discountsLocked = true;
-  }
-
   function setOwnerAltPayout(address ownerAltPayout) external _onlyOwner {
     if (options.ownerAltPayoutLocked) {
       revert LockedForever();
@@ -440,6 +432,32 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
 
   function setRemintPremium(uint16 remintPremium) external _onlyOwner {
     config.remintPremium = remintPremium;
+  }
+
+  function setBonusDiscounts(bytes32 _key, BonusDiscount[] calldata _bonusDiscounts) public onlyOwner {
+      if(_bonusDiscounts.length > 8) {
+        revert InvalidConfig();
+      }
+      
+      uint256 packed;
+      for (uint8 i = 0; i < _bonusDiscounts.length; i++) {
+          if (i > 0 && _bonusDiscounts[i].numMints >= _bonusDiscounts[i - 1].numMints) {
+              revert InvalidConfig();
+          }
+          uint32 discount = (uint32(_bonusDiscounts[i].numMints) << 16) | uint32(_bonusDiscounts[i].numBonusMints);
+          packed |= uint256(discount) << (32 * i);
+      }
+      packedBonusDiscounts[_key] = packed;
+  }
+
+  function setBonusInvite(
+    bytes32 _key,
+    bytes32 _cid,
+    AdvancedInvite calldata _advancedInvite,
+    BonusDiscount[] calldata _bonusDiscount
+  ) external _onlyOwner {
+    setBonusDiscounts(_key, _bonusDiscount);
+    setAdvancedInvite(_key, _cid, _advancedInvite);
   }
 
   function setInvite(

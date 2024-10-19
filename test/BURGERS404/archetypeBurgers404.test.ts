@@ -84,9 +84,6 @@ describe("Factory", function () {
       defaultRoyalty: 500,
       erc20Ratio: ERC20RATIO,
       remintPremium: 2000, // 20%
-      bonusDiscounts: {
-        bonusTiers: [],
-      },
     };
     DEFAULT_PAYOUT_CONFIG = {
       ownerBps: 9500,
@@ -690,22 +687,6 @@ describe("Factory", function () {
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 2000,
-        bonusDiscounts: {
-          bonusTiers: [
-            {
-              numMints: 20,
-              numBonusMints: 10,
-            },
-            {
-              numMints: 10,
-              numBonusMints: 4,
-            },
-            {
-              numMints: 3,
-              numBonusMints: 1,
-            },
-          ],
-        },
       },
       DEFAULT_PAYOUT_CONFIG
     );
@@ -718,16 +699,37 @@ describe("Factory", function () {
       ArchetypeBurgers404.attach(newCollectionAddress)
     );
 
-    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
-      price: ethers.parseEther("0.0001"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-      end: 0,
-      limit: 300 * ERC20RATIO,
-      maxSupply: DEFAULT_CONFIG.maxSupply,
-      unitSize: 0,
-      tokenAddress: ZERO,
-      isBlacklist: false,
-    });
+    await nft.connect(owner).setBonusInvite(
+      ethers.ZeroHash,
+      ipfsh.ctod(CID_ZERO),
+      {
+        price: ethers.parseEther("0.0001"),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+        end: 0,
+        limit: 300 * ERC20RATIO,
+        maxSupply: DEFAULT_CONFIG.maxSupply,
+        unitSize: 0,
+        tokenAddress: ZERO,
+        isBlacklist: false,
+        reservePrice: 0,
+        delta: 0,
+        interval: 0,
+      },
+      [
+        {
+          numMints: 20,
+          numBonusMints: 10,
+        },
+        {
+          numMints: 10,
+          numBonusMints: 4,
+        },
+        {
+          numMints: 3,
+          numBonusMints: 1,
+        },
+      ]
+    );
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -1133,33 +1135,6 @@ describe("Factory", function () {
     await nft.connect(owner).lockAffiliateFee();
     await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
     await expect(nft.connect(owner).setAffiliateDiscount(20)).to.be.reverted;
-
-    // CHANGE DISCOUNTS
-    const bonusDiscounts = {
-      bonusTiers: [
-        {
-          numMints: 10,
-          numBonusMints: 4,
-        },
-        {
-          numMints: 5,
-          numBonusMints: 1,
-        },
-      ],
-    };
-    await nft.connect(owner).setDiscounts(bonusDiscounts);
-    const _discount = Object.values(bonusDiscounts);
-    bonusDiscounts.bonusTiers.forEach((obj, i) => {
-      _discount[0][i] = Object.values(obj);
-    });
-    await expect(
-      (
-        await nft.connect(owner).config()
-      ).bonusDiscounts
-    ).to.deep.equal(_discount);
-    await nft.connect(owner).lockDiscounts();
-    await expect(nft.connect(owner).setDiscounts(bonusDiscounts)).to.be
-      .reverted;
   });
 
   // it("test burn to mint functionality", async function () {
@@ -1426,9 +1401,9 @@ describe("Factory", function () {
       (3 * ERC20RATIO + (ERC20RATIO - change * 1)) * ERC20UNIT;
 
     // make sure free mints are counted in max supply
-    await nftMint.setDiscounts({
-      bonusTiers: [{ numMints: 1, numBonusMints: 1 }],
-    });
+    await nftMint.setBonusDiscounts(ethers.ZeroHash, [
+      { numMints: 1, numBonusMints: 1 },
+    ]);
 
     // free mint will make max supply exceed
     await expect(
@@ -1439,9 +1414,9 @@ describe("Factory", function () {
         })
     ).to.be.revertedWithCustomError(archetypeLogic, "MaxSupplyExceeded");
 
-    await nftMint.setDiscounts({
-      bonusTiers: [{ numMints: 0, numBonusMints: 0 }],
-    });
+    await nftMint.setBonusDiscounts(ethers.ZeroHash, [
+      { numMints: 0, numBonusMints: 0 },
+    ]);
 
     // mint last nft
     await nftMint

@@ -55,13 +55,9 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct BonusTier {
-  uint32 numMints;
-  uint32 numBonusMints;
-}
-
 struct BonusDiscount {
-  BonusTier[] bonusTiers;
+  uint16 numMints;
+  uint16 numBonusMints;
 }
 
 struct Config {
@@ -74,7 +70,6 @@ struct Config {
   uint16 defaultRoyalty; //BPS
   uint16 remintPremium; //BPS premium for burning and reminting a new token
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
-  BonusDiscount bonusDiscounts;
 }
 
 struct PayoutConfig {
@@ -91,7 +86,6 @@ struct Options {
   bool uriLocked;
   bool maxSupplyLocked;
   bool affiliateFeeLocked;
-  bool discountsLocked;
   bool ownerAltPayoutLocked;
 }
 
@@ -129,9 +123,9 @@ struct ValidationArgs {
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
-address constant PLATFORM = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
-address constant BATCH = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
-address constant PAYOUTS = 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0;
+address constant PLATFORM = 0x86B82972282Dd22348374bC63fd21620F7ED847B;
+address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
+address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 uint256 constant ERC20_UNIT = 10 ** 18;
@@ -186,13 +180,19 @@ library ArchetypeLogicBurgers404 {
     return cost;
   }
 
-  function bonusMintsAwarded(uint256 numNfts, BonusDiscount storage bonusDiscount) internal view returns (uint256){
-    uint256 numMints = bonusDiscount.bonusTiers.length;
-    for (uint16 i; i < numMints; i++ ) {
-      uint256 tierNumMints = bonusDiscount.bonusTiers[i].numMints;
-      if (numNfts >= tierNumMints) {
-        return bonusDiscount.bonusTiers[i].numBonusMints;
-      }
+  function bonusMintsAwarded(uint256 numNfts, uint256 packedDiscount) internal pure returns (uint256) {
+    for (uint8 i = 0; i < 8; i++) {
+        uint32 discount = uint32((packedDiscount >> (32 * i)) & 0xFFFFFFFF);
+        uint16 tierNumMints = uint16(discount >> 16);
+        uint16 tierBonusMints = uint16(discount);
+        
+        if (tierNumMints == 0) {
+            break; // End of valid discounts
+        }
+        
+        if (numNfts >= tierNumMints) {
+            return tierBonusMints;
+        }
     }
     return 0;
   }

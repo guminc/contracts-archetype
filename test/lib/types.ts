@@ -24,12 +24,6 @@ export type IArchetypeBurgers404Config = {
   defaultRoyalty: number;
   remintPremium: number;
   erc20Ratio: number;
-  bonusDiscounts: {
-    bonusTiers: {
-      numMints: number;
-      numBonusMints: number;
-    }[];
-  };
 };
 
 export type IArchetypeErc1155RandomConfig = {
