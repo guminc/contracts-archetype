@@ -27,14 +27,8 @@ export type IArchetypeErc1155RandomConfig = {
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
+  affiliateDiscount: number;
   defaultRoyalty: number;
-  discounts: {
-    affiliateDiscount: number;
-    mintTiers: {
-      numMints: number;
-      mintDiscount: number;
-    }[];
-  };
   tokenPool: number[];
 };
 

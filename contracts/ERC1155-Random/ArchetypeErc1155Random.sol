@@ -36,6 +36,7 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   // VARIABLES
   //
   mapping(bytes32 => AdvancedInvite) public invites;
+  mapping(bytes32 => uint256) public packedBonusDiscounts;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
   mapping(address => uint128) private _ownerBalance;
@@ -70,22 +71,14 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     // check max bps not reached and min platform fee.
     if (
       config_.affiliateFee > MAXBPS ||
-      config_.discounts.affiliateDiscount > MAXBPS ||
+      config_.affiliateDiscount > MAXBPS ||
       config_.affiliateSigner == address(0) ||
       config_.fulfillmentSigner == address(0) ||
       config_.maxBatchSize == 0
     ) {
       revert InvalidConfig();
     }
-    // ensure mint tiers are correctly ordered from highest to lowest.
-    for (uint256 i = 1; i < config_.discounts.mintTiers.length; i++) {
-      if (
-        config_.discounts.mintTiers[i].mintDiscount > MAXBPS ||
-        config_.discounts.mintTiers[i].numMints > config_.discounts.mintTiers[i - 1].numMints
-      ) {
-        revert InvalidConfig();
-      }
-    }
+
     config = config_;
     __Ownable_init();
 
@@ -123,61 +116,80 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     bytes calldata signature,
     uint256 seedHash
   ) public payable {
-    {
-      if (to == address(0)) {
-        revert MintToZeroAddress();
-      }
 
-      MintInfo memory mintInfo = seedHashMintInfo[seedHash];
-      if (mintInfo.quantity != 0 || mintInfo.key == FULFILLED_KEY) {
-        revert SeedHashAlreadyExists();
-      }
+    if (to == address(0)) {
+      revert MintToZeroAddress();
     }
 
-    AdvancedInvite storage i = invites[auth.key];
-
-    if (i.unitSize > 1) {
-      quantity = quantity * i.unitSize;
+    MintInfo memory mintInfo = seedHashMintInfo[seedHash];
+    if (mintInfo.quantity != 0 || mintInfo.key == FULFILLED_KEY) {
+      revert SeedHashAlreadyExists();
     }
 
-    ValidationArgs memory args = ValidationArgs({
-      owner: owner(),
-      affiliate: affiliate,
-      quantity: quantity,
-      curSupply: totalSupply,
-      listSupply: _listSupply[auth.key]
+    AdvancedInvite storage invite = invites[auth.key];
+    uint256 packedDiscount = packedBonusDiscounts[auth.key];
+
+    if (invite.unitSize > 1) {
+      quantity = quantity * invite.unitSize;
+    }
+
+    uint256 numBonusMints = ArchetypeLogicErc1155Random.bonusMintsAwarded(quantity, packedDiscount);
+
+    validateAndCreditMint(invite, auth, quantity, numBonusMints, totalSupply, affiliate, signature);
+  
+    seedHashMintInfo[seedHash] = MintInfo({
+      key: auth.key,
+      to: to,
+      quantity: quantity + numBonusMints,
+      blockNumber: block.number
     });
+    emit RequestRandomness(seedHash);
+  }
+
+  function validateAndCreditMint(
+    AdvancedInvite storage invite,
+    Auth calldata auth,
+    uint256 quantity,
+    uint256 numBonusMints,
+    uint256 curSupply,
+    address affiliate,
+    bytes calldata signature
+  ) internal {
+    uint256 totalQuantity = quantity + numBonusMints;
+
+    ValidationArgs memory args;
+    {
+      args = ValidationArgs({
+        owner: owner(),
+        affiliate: affiliate,
+        quantity: totalQuantity,
+        curSupply: curSupply,
+        listSupply: _listSupply[auth.key]
+      });
+    }
 
     uint128 cost = uint128(
       ArchetypeLogicErc1155Random.computePrice(
-        i,
-        config.discounts,
-        args.quantity,
+        invite,
+        config.affiliateDiscount,
+        quantity,
         args.listSupply,
         args.affiliate != address(0)
       )
     );
 
-    ArchetypeLogicErc1155Random.validateMint(i, config, auth, _minted, _listSupply, signature, args, cost);
+    ArchetypeLogicErc1155Random.validateMint(invite, config, auth, _minted, _listSupply, signature, args, cost);
 
-    seedHashMintInfo[seedHash] = MintInfo({
-      key: auth.key,
-      to: to,
-      quantity: quantity,
-      blockNumber: block.number
-    });
-    emit RequestRandomness(seedHash);
-
-    totalSupply += quantity;
-    if (i.limit < i.maxSupply) {
-      _minted[_msgSender()][auth.key] += quantity;
+    if (invite.limit < invite.maxSupply) {
+      _minted[_msgSender()][auth.key] += totalQuantity;
     }
-    if (i.maxSupply < 2**32 - 1) {
-      _listSupply[auth.key] += quantity;
+    if (invite.maxSupply < UINT32_MAX) {
+      _listSupply[auth.key] += totalQuantity;
     }
+    totalSupply += totalQuantity;
 
     ArchetypeLogicErc1155Random.updateBalances(
-      i,
+      invite,
       config,
       _ownerBalance,
       _affiliateBalance,
@@ -257,7 +269,7 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   ) external view returns (uint256) {
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicErc1155Random.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
+    return ArchetypeLogicErc1155Random.computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
   }
 
   //
@@ -372,38 +384,23 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     config.affiliateFee = affiliateFee;
   }
 
+
+  function setAffiliateDiscount(uint16 affiliateDiscount) external _onlyOwner {
+    if (options.affiliateFeeLocked) {
+      revert LockedForever();
+    }
+    if (affiliateDiscount > MAXBPS) {
+      revert InvalidConfig();
+    }
+
+    config.affiliateDiscount = affiliateDiscount;
+  }
+
+
   /// @notice the password is "forever"
   function lockAffiliateFee(string memory password) external _onlyOwner {
     _checkPassword(password);
     options.affiliateFeeLocked = true;
-  }
-
-  function setDiscounts(Discount calldata discounts) external _onlyOwner {
-    if (options.discountsLocked) {
-      revert LockedForever();
-    }
-
-    if (discounts.affiliateDiscount > MAXBPS) {
-      revert InvalidConfig();
-    }
-
-    // ensure mint tiers are correctly ordered from highest to lowest.
-    for (uint256 i = 1; i < discounts.mintTiers.length; i++) {
-      if (
-        discounts.mintTiers[i].mintDiscount > MAXBPS ||
-        discounts.mintTiers[i].numMints > discounts.mintTiers[i - 1].numMints
-      ) {
-        revert InvalidConfig();
-      }
-    }
-
-    config.discounts = discounts;
-  }
-
-  /// @notice the password is "forever"
-  function lockDiscounts(string memory password) external _onlyOwner {
-    _checkPassword(password);
-    options.discountsLocked = true;
   }
 
   function setOwnerAltPayout(address ownerAltPayout) external _onlyOwner {
@@ -420,6 +417,32 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
 
   function setMaxBatchSize(uint16 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
+  }
+
+  function setBonusDiscounts(bytes32 _key, BonusDiscount[] calldata _bonusDiscounts) public onlyOwner {
+    if(_bonusDiscounts.length > 8) {
+      revert InvalidConfig();
+    }
+
+    uint256 packed;
+    for (uint8 i = 0; i < _bonusDiscounts.length; i++) {
+        if (i > 0 && _bonusDiscounts[i].numMints >= _bonusDiscounts[i - 1].numMints) {
+            revert InvalidConfig();
+        }
+        uint32 discount = (uint32(_bonusDiscounts[i].numMints) << 16) | uint32(_bonusDiscounts[i].numBonusMints);
+        packed |= uint256(discount) << (32 * i);
+    }
+    packedBonusDiscounts[_key] = packed;
+  }
+
+  function setBonusInvite(
+    bytes32 _key,
+    bytes32 _cid,
+    AdvancedInvite calldata _advancedInvite,
+    BonusDiscount[] calldata _bonusDiscount
+  ) external _onlyOwner {
+    setBonusDiscounts(_key, _bonusDiscount);
+    setAdvancedInvite(_key, _cid, _advancedInvite);
   }
 
   function setInvite(
