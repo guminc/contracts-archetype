@@ -817,9 +817,6 @@ describe("Factory", function () {
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 0,
-        bonusDiscounts: {
-          bonusTiers: [],
-        },
       },
       {
         ownerBps: 9000,
@@ -933,9 +930,6 @@ describe("Factory", function () {
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 2000,
-        bonusDiscounts: {
-          bonusTiers: [],
-        },
       },
       {
         ownerBps: 9000,
