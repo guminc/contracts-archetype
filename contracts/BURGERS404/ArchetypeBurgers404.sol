@@ -40,7 +40,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
 
   string private _name;
   string private _symbol;
-  uint256 private numErc20Mints;
+  uint256 private totalErc20Mints;
   Config public config;
   PayoutConfig public payoutConfig;
   Options public options;
@@ -64,7 +64,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     // check max bps not reached and min platform fee.
     if (
       config_.affiliateFee > MAXBPS ||
-      config_.volumeDiscounts.affiliateDiscount > MAXBPS ||
+      config_.affiliateDiscount > MAXBPS ||
       config_.affiliateSigner == address(0) ||
       config_.maxBatchSize == 0
     ) {
@@ -109,7 +109,8 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
 
     AdvancedInvite storage invite = invites[auth.key];
 
-    uint256 quantity;
+    uint256 totalQuantity;
+    uint256 totalBonusMints;
 
     for (uint256 i; i < toList.length; ) {
       uint256 quantityToAdd;
@@ -118,17 +119,19 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
       } else {
         quantityToAdd = quantityList[i];
       }
-      quantity += quantityToAdd;
 
-      uint256 quantityToMint = quantityToAdd + ArchetypeLogicBurgers404.freeMintsAwarded(quantityToAdd / config.erc20Ratio, config.volumeDiscounts) * config.erc20Ratio;
-      _mintNext(toList[i], quantityToMint * ERC20_UNIT, "");
+      uint256 numBonusMints = ArchetypeLogicBurgers404.bonusMintsAwarded(quantityToAdd / config.erc20Ratio, config.bonusDiscounts) * config.erc20Ratio;
+      _mintNext(toList[i], (quantityToAdd + numBonusMints) * ERC20_UNIT, "");
+
+      totalQuantity += quantityToAdd;
+      totalBonusMints += numBonusMints;
 
       unchecked {
         ++i;
       }
     }
 
-    validateAndCreditMint(invite, auth, quantity, numErc20Mints, affiliate, signature);
+    validateAndCreditMint(invite, auth, totalQuantity, totalBonusMints, totalErc20Mints, affiliate, signature);
   }
 
   function mintTo(
@@ -144,26 +147,28 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
       quantity = quantity * invite.unitSize;
     }
 
-    uint256 quantityToMint = quantity + ArchetypeLogicBurgers404.freeMintsAwarded(quantity / config.erc20Ratio, config.volumeDiscounts) * config.erc20Ratio;
-    _mintNext(to, quantityToMint * ERC20_UNIT, "");
+    uint256 numBonusMints = ArchetypeLogicBurgers404.bonusMintsAwarded(quantity / config.erc20Ratio, config.bonusDiscounts) * config.erc20Ratio;
+    _mintNext(to, (quantity + numBonusMints) * ERC20_UNIT, "");
 
-    validateAndCreditMint(invite, auth, quantity, numErc20Mints, affiliate, signature);
+    validateAndCreditMint(invite, auth, quantity, numBonusMints, totalErc20Mints, affiliate, signature);
   }
 
   function validateAndCreditMint(
     AdvancedInvite storage invite,
     Auth calldata auth,
     uint256 quantity,
+    uint256 numBonusMints,
     uint256 curSupply,
     address affiliate,
     bytes calldata signature
   ) internal {
+    uint256 totalQuantity = quantity + numBonusMints;
     ValidationArgs memory args;
     {
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
-        quantity: quantity,
+        quantity: totalQuantity,
         curSupply: curSupply,
         listSupply: _listSupply[auth.key]
       });
@@ -172,8 +177,8 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     uint128 cost = uint128(
       ArchetypeLogicBurgers404.computePrice(
         invite,
-        config.volumeDiscounts,
-        args.quantity,
+        config.affiliateDiscount,
+        quantity,
         args.listSupply,
         args.affiliate != address(0)
       )
@@ -182,12 +187,12 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     ArchetypeLogicBurgers404.validateMint(invite, config, auth, _minted, signature, args, cost);
 
     if (invite.limit < invite.maxSupply) {
-      _minted[_msgSender()][auth.key] += quantity;
+      _minted[_msgSender()][auth.key] += totalQuantity;
     }
     if (invite.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += quantity;
+      _listSupply[auth.key] += totalQuantity;
     }
-    numErc20Mints += quantity;
+    totalErc20Mints += totalQuantity;
 
     ArchetypeLogicBurgers404.updateBalances(
       invite,
@@ -282,11 +287,11 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   }
 
   function numErc20Minted() public view returns (uint256) {
-    return numErc20Mints;
+    return totalErc20Mints;
   }
 
   function numNftsMinted() public view returns (uint256) {
-    return numErc20Mints / config.erc20Ratio;
+    return totalErc20Mints / config.erc20Ratio;
   }
 
   function balanceOfNFT(address owner) public view returns (uint256) {
@@ -312,7 +317,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   ) external view returns (uint256) {
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicBurgers404.computePrice(i, config.volumeDiscounts, quantity, listSupply_, affiliateUsed);
+    return ArchetypeLogicBurgers404.computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
   }
 
   //
@@ -390,20 +395,27 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     config.affiliateFee = affiliateFee;
   }
 
+  function setAffiliateDiscount(uint16 affiliateDiscount) external _onlyOwner {
+    if (options.affiliateFeeLocked) {
+      revert LockedForever();
+    }
+    if (affiliateDiscount > MAXBPS) {
+      revert InvalidConfig();
+    }
+
+    config.affiliateDiscount = affiliateDiscount;
+  }
+
   function lockAffiliateFee() external _onlyOwner {
     options.affiliateFeeLocked = true;
   }
 
-  function setDiscounts(VolumeDiscount calldata volumeDiscounts) external _onlyOwner {
+  function setDiscounts(BonusDiscount calldata bonusDiscounts) external _onlyOwner {
     if (options.discountsLocked) {
       revert LockedForever();
     }
 
-    if (volumeDiscounts.affiliateDiscount > MAXBPS) {
-      revert InvalidConfig();
-    }
-
-    config.volumeDiscounts = volumeDiscounts;
+    config.bonusDiscounts = bonusDiscounts;
   }
 
   function lockDiscounts() external _onlyOwner {

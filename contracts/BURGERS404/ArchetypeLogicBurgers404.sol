@@ -55,14 +55,13 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct VolumeBonusTier {
+struct BonusTier {
   uint32 numMints;
-  uint32 numFreeMints;
+  uint32 numBonusMints;
 }
 
-struct VolumeDiscount {
-  uint16 affiliateDiscount; // BPS
-  VolumeBonusTier[] volumeTiers;
+struct BonusDiscount {
+  BonusTier[] bonusTiers;
 }
 
 struct Config {
@@ -71,10 +70,11 @@ struct Config {
   uint32 maxSupply; // in erc20
   uint32 maxBatchSize; // in erc20
   uint16 affiliateFee; //BPS
+  uint16 affiliateDiscount; // BPS
   uint16 defaultRoyalty; //BPS
   uint16 remintPremium; //BPS premium for burning and reminting a new token
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
-  VolumeDiscount volumeDiscounts;
+  BonusDiscount bonusDiscounts;
 }
 
 struct PayoutConfig {
@@ -129,9 +129,9 @@ struct ValidationArgs {
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
-address constant PLATFORM = 0x86B82972282Dd22348374bC63fd21620F7ED847B;
-address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
-address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
+address constant PLATFORM = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
+address constant BATCH = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
+address constant PAYOUTS = 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 uint256 constant ERC20_UNIT = 10 ** 18;
@@ -147,7 +147,7 @@ library ArchetypeLogicBurgers404 {
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
     AdvancedInvite storage invite,
-    VolumeDiscount storage volumeDiscounts,
+    uint16 affiliateDiscount,
     uint256 numTokens,
     uint256 listSupply,
     bool affiliateUsed
@@ -180,18 +180,18 @@ library ArchetypeLogicBurgers404 {
     }
 
     if (affiliateUsed) {
-      cost = cost - ((cost * volumeDiscounts.affiliateDiscount) / 10000);
+      cost = cost - ((cost * affiliateDiscount) / 10000);
     }
 
     return cost;
   }
 
-  function freeMintsAwarded(uint256 numNfts, VolumeDiscount storage volumeDiscount) internal view returns (uint256){
-    uint256 numMints = volumeDiscount.volumeTiers.length;
+  function bonusMintsAwarded(uint256 numNfts, BonusDiscount storage bonusDiscount) internal view returns (uint256){
+    uint256 numMints = bonusDiscount.bonusTiers.length;
     for (uint16 i; i < numMints; i++ ) {
-      uint256 tierNumMints = volumeDiscount.volumeTiers[i].numMints;
+      uint256 tierNumMints = bonusDiscount.bonusTiers[i].numMints;
       if (numNfts >= tierNumMints) {
-        return volumeDiscount.volumeTiers[i].numFreeMints;
+        return bonusDiscount.bonusTiers[i].numBonusMints;
       }
     }
     return 0;

@@ -20,14 +20,14 @@ export type IArchetypeBurgers404Config = {
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
+  affiliateDiscount: number;
   defaultRoyalty: number;
   remintPremium: number;
   erc20Ratio: number;
-  volumeDiscounts: {
-    affiliateDiscount: number;
-    volumeTiers: {
+  bonusDiscounts: {
+    bonusTiers: {
       numMints: number;
-      numFreeMints: number;
+      numBonusMints: number;
     }[];
   };
 };

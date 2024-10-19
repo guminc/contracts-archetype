@@ -80,16 +80,12 @@ describe("Factory", function () {
       maxSupply: 5000 * ERC20RATIO,
       maxBatchSize: 100 * ERC20RATIO,
       affiliateFee: 1500,
+      affiliateDiscount: 0,
       defaultRoyalty: 500,
       erc20Ratio: ERC20RATIO,
       remintPremium: 2000, // 20%
-      volumeDiscounts: {
-        affiliateDiscount: 0,
-        volumeTiers: [],
-        // [{
-        //   numMints: number;
-        //   mintDiscount: number;
-        // }];
+      bonusDiscounts: {
+        bonusTiers: [],
       },
     };
     DEFAULT_PAYOUT_CONFIG = {
@@ -690,23 +686,23 @@ describe("Factory", function () {
         maxSupply: 5000 * ERC20RATIO,
         maxBatchSize: 100 * ERC20RATIO,
         affiliateFee: 1500,
+        affiliateDiscount: 1000, // 10%
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 2000,
-        volumeDiscounts: {
-          affiliateDiscount: 1000, // 10%
-          volumeTiers: [
+        bonusDiscounts: {
+          bonusTiers: [
             {
               numMints: 20,
-              numFreeMints: 10,
+              numBonusMints: 10,
             },
             {
               numMints: 10,
-              numFreeMints: 4,
+              numBonusMints: 4,
             },
             {
               numMints: 3,
-              numFreeMints: 1,
+              numBonusMints: 1,
             },
           ],
         },
@@ -815,12 +811,12 @@ describe("Factory", function () {
         maxSupply: 5000 * ERC20RATIO,
         maxBatchSize: 100 * ERC20RATIO,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 0,
-        volumeDiscounts: {
-          affiliateDiscount: 0,
-          volumeTiers: [],
+        bonusDiscounts: {
+          bonusTiers: [],
         },
       },
       {
@@ -931,12 +927,12 @@ describe("Factory", function () {
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 2000,
-        volumeDiscounts: {
-          affiliateDiscount: 0, // 10%
-          volumeTiers: [],
+        bonusDiscounts: {
+          bonusTiers: [],
         },
       },
       {
@@ -1125,35 +1121,44 @@ describe("Factory", function () {
     await expect((await nft.connect(owner).config()).affiliateFee).to.be.equal(
       1000
     );
+
+    // CHANGE AFFILIATE DISCOUNT
+    await nft.connect(owner).setAffiliateDiscount(1000);
+    await expect(
+      (
+        await nft.connect(owner).config()
+      ).affiliateDiscount
+    ).to.be.equal(1000);
+
     await nft.connect(owner).lockAffiliateFee();
     await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
+    await expect(nft.connect(owner).setAffiliateDiscount(20)).to.be.reverted;
 
     // CHANGE DISCOUNTS
-    const volumeDiscounts = {
-      affiliateDiscount: 2000,
-      volumeTiers: [
+    const bonusDiscounts = {
+      bonusTiers: [
         {
           numMints: 10,
-          numFreeMints: 4,
+          numBonusMints: 4,
         },
         {
           numMints: 5,
-          numFreeMints: 1,
+          numBonusMints: 1,
         },
       ],
     };
-    await nft.connect(owner).setDiscounts(volumeDiscounts);
-    const _discount = Object.values(volumeDiscounts);
-    volumeDiscounts.volumeTiers.forEach((obj, i) => {
-      _discount[1][i] = Object.values(obj);
+    await nft.connect(owner).setDiscounts(bonusDiscounts);
+    const _discount = Object.values(bonusDiscounts);
+    bonusDiscounts.bonusTiers.forEach((obj, i) => {
+      _discount[0][i] = Object.values(obj);
     });
     await expect(
       (
         await nft.connect(owner).config()
-      ).volumeDiscounts
+      ).bonusDiscounts
     ).to.deep.equal(_discount);
     await nft.connect(owner).lockDiscounts();
-    await expect(nft.connect(owner).setDiscounts(volumeDiscounts)).to.be
+    await expect(nft.connect(owner).setDiscounts(bonusDiscounts)).to.be
       .reverted;
   });
 
@@ -1320,7 +1325,9 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.logs[0].address || "";
-    const nftMint = ArchetypeBurgers404.attach(newCollectionAddressMint);
+    const nftMint = asContractType<ArchetypeBurgers404>(
+      ArchetypeBurgers404.attach(newCollectionAddressMint)
+    );
 
     await nftMint
       .connect(owner)
@@ -1417,6 +1424,24 @@ describe("Factory", function () {
     const change = (ERC20RATIO * DEFAULT_CONFIG.remintPremium) / 10000;
     const burnToRemintSupplyBump =
       (3 * ERC20RATIO + (ERC20RATIO - change * 1)) * ERC20UNIT;
+
+    // make sure free mints are counted in max supply
+    await nftMint.setDiscounts({
+      bonusTiers: [{ numMints: 1, numBonusMints: 1 }],
+    });
+
+    // free mint will make max supply exceed
+    await expect(
+      nftMint
+        .connect(minter)
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1 * ERC20RATIO, ZERO, "0x", {
+          value: 0,
+        })
+    ).to.be.revertedWithCustomError(archetypeLogic, "MaxSupplyExceeded");
+
+    await nftMint.setDiscounts({
+      bonusTiers: [{ numMints: 0, numBonusMints: 0 }],
+    });
 
     // mint last nft
     await nftMint
