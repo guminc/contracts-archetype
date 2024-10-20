@@ -42,6 +42,7 @@ contract ArchetypeErc721a is
   // VARIABLES
   //
   mapping(bytes32 => AdvancedInvite) public invites;
+  mapping(bytes32 => uint256) public packedBonusDiscounts;
   mapping(bytes32 => BurnInvite) public burnInvites;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
@@ -66,23 +67,11 @@ contract ArchetypeErc721a is
     // check max bps not reached and min platform fee.
     if (
       config_.affiliateFee > MAXBPS ||
-      config_.discounts.affiliateDiscount > MAXBPS ||
+      config_.affiliateDiscount > MAXBPS ||
       config_.affiliateSigner == address(0) ||
       config_.maxBatchSize == 0
     ) {
       revert InvalidConfig();
-    }
-    // ensure mint tiers are correctly ordered from highest to lowest.
-    for (uint256 i = 1; i < config_.discounts.mintTiers.length; ) {
-      if (
-        config_.discounts.mintTiers[i].mintDiscount > MAXBPS ||
-        config_.discounts.mintTiers[i].numMints > config_.discounts.mintTiers[i - 1].numMints
-      ) {
-        revert InvalidConfig();
-      }
-      unchecked {
-        ++i;
-      }
     }
     config = config_;
     __Ownable_init();
@@ -123,9 +112,12 @@ contract ArchetypeErc721a is
     }
 
     AdvancedInvite storage invite = invites[auth.key];
+    uint256 packedDiscount = packedBonusDiscounts[auth.key];
     uint256 curSupply = _totalMinted();
     
-    uint256 quantity;
+    uint256 totalQuantity;
+    uint256 totalBonusMints;
+
     for (uint256 i; i < toList.length; ) {
       uint256 quantityToAdd;
       if (invite.unitSize > 1) {
@@ -133,16 +125,19 @@ contract ArchetypeErc721a is
       } else {
         quantityToAdd = quantityList[i];
       }
-      quantity += quantityToAdd;
 
-      _mint(toList[i], quantityToAdd);
+      uint256 numBonusMints = ArchetypeLogicErc721a.bonusMintsAwarded(quantityToAdd, packedDiscount);
+      _mint(toList[i], quantityToAdd + numBonusMints);
+
+      totalQuantity += quantityToAdd;
+      totalBonusMints += numBonusMints;
 
       unchecked {
         ++i;
       }
     }
 
-    validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
+    validateAndCreditMint(invite, auth, totalQuantity, totalBonusMints, curSupply, affiliate, signature);
   }
 
   function mintTo(
@@ -153,31 +148,36 @@ contract ArchetypeErc721a is
     bytes calldata signature
   ) public payable {
     AdvancedInvite storage invite = invites[auth.key];
+    uint256 packedDiscount = packedBonusDiscounts[auth.key];
 
     if (invite.unitSize > 1) {
       quantity = quantity * invite.unitSize;
     }
 
     uint256 curSupply = _totalMinted();
-    _mint(to, quantity);
 
-    validateAndCreditMint(invite, auth, quantity, curSupply, affiliate, signature);
+    uint256 numBonusMints = ArchetypeLogicErc721a.bonusMintsAwarded(quantity, packedDiscount);
+    _mint(to, quantity + numBonusMints);
+
+    validateAndCreditMint(invite, auth, quantity, numBonusMints, curSupply, affiliate, signature);
   }
 
   function validateAndCreditMint(
     AdvancedInvite storage invite,
     Auth calldata auth,
     uint256 quantity,
+    uint256 numBonusMints,
     uint256 curSupply,
     address affiliate,
     bytes calldata signature
   ) internal {
+    uint256 totalQuantity = quantity + numBonusMints;
     ValidationArgs memory args;
     {
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
-        quantity: quantity,
+        quantity: totalQuantity,
         curSupply: curSupply,
         listSupply: _listSupply[auth.key]
       });
@@ -186,8 +186,8 @@ contract ArchetypeErc721a is
     uint128 cost = uint128(
       ArchetypeLogicErc721a.computePrice(
         invite,
-        config.discounts,
-        args.quantity,
+        config.affiliateDiscount,
+        quantity,
         args.listSupply,
         args.affiliate != address(0)
       )
@@ -196,10 +196,10 @@ contract ArchetypeErc721a is
     ArchetypeLogicErc721a.validateMint(invite, config, auth, _minted, signature, args, cost);
 
     if (invite.limit < invite.maxSupply) {
-      _minted[_msgSender()][auth.key] += quantity;
+      _minted[_msgSender()][auth.key] += totalQuantity;
     }
     if (invite.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += quantity;
+      _listSupply[auth.key] += totalQuantity;
     }
 
     ArchetypeLogicErc721a.updateBalances(
@@ -323,7 +323,7 @@ contract ArchetypeErc721a is
   ) external view returns (uint256) {
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicErc721a.computePrice(i, config.discounts, quantity, listSupply_, affiliateUsed);
+    return ArchetypeLogicErc721a.computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
   }
 
   //
@@ -385,6 +385,17 @@ contract ArchetypeErc721a is
     config.affiliateFee = affiliateFee;
   }
 
+  function setAffiliateDiscount(uint16 affiliateDiscount) external _onlyOwner {
+    if (options.affiliateFeeLocked) {
+      revert LockedForever();
+    }
+    if (affiliateDiscount > MAXBPS) {
+      revert InvalidConfig();
+    }
+
+    config.affiliateDiscount = affiliateDiscount;
+  }
+
   /// @notice the password is "forever"
   function lockAffiliateFee(string memory password) external _onlyOwner {
     if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
@@ -392,40 +403,6 @@ contract ArchetypeErc721a is
     }
 
     options.affiliateFeeLocked = true;
-  }
-
-  function setDiscounts(Discount calldata discounts) external _onlyOwner {
-    if (options.discountsLocked) {
-      revert LockedForever();
-    }
-
-    if (discounts.affiliateDiscount > MAXBPS) {
-      revert InvalidConfig();
-    }
-
-    // ensure mint tiers are correctly ordered from highest to lowest.
-    for (uint256 i = 1; i < discounts.mintTiers.length; ) {
-      if (
-        discounts.mintTiers[i].mintDiscount > MAXBPS ||
-        discounts.mintTiers[i].numMints > discounts.mintTiers[i - 1].numMints
-      ) {
-        revert InvalidConfig();
-      }
-      unchecked {
-        ++i;
-      }
-    }
-
-    config.discounts = discounts;
-  }
-
-  /// @notice the password is "forever"
-  function lockDiscounts(string memory password) external _onlyOwner {
-    if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
-      revert WrongPassword();
-    }
-
-    options.discountsLocked = true;
   }
 
   function setOwnerAltPayout(address ownerAltPayout) external _onlyOwner {
@@ -442,6 +419,32 @@ contract ArchetypeErc721a is
 
   function setMaxBatchSize(uint32 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
+  }
+
+  function setBonusDiscounts(bytes32 _key, BonusDiscount[] calldata _bonusDiscounts) public onlyOwner {
+    if(_bonusDiscounts.length > 8) {
+      revert InvalidConfig();
+    }
+
+    uint256 packed;
+    for (uint8 i = 0; i < _bonusDiscounts.length; i++) {
+        if (i > 0 && _bonusDiscounts[i].numMints >= _bonusDiscounts[i - 1].numMints) {
+            revert InvalidConfig();
+        }
+        uint32 discount = (uint32(_bonusDiscounts[i].numMints) << 16) | uint32(_bonusDiscounts[i].numBonusMints);
+        packed |= uint256(discount) << (32 * i);
+    }
+    packedBonusDiscounts[_key] = packed;
+  }
+
+  function setBonusInvite(
+    bytes32 _key,
+    bytes32 _cid,
+    AdvancedInvite calldata _advancedInvite,
+    BonusDiscount[] calldata _bonusDiscount
+  ) external _onlyOwner {
+    setBonusDiscounts(_key, _bonusDiscount);
+    setAdvancedInvite(_key, _cid, _advancedInvite);
   }
 
   function setInvite(

@@ -90,15 +90,8 @@ describe("FactoryErc1155Random", function () {
       maxSupply: 50,
       maxBatchSize: 20,
       affiliateFee: 1500,
+      affiliateDiscount: 0,
       defaultRoyalty: 500,
-      discounts: {
-        affiliateDiscount: 0,
-        mintTiers: [],
-        // [{
-        //   numMints: number;
-        //   mintDiscount: number;
-        // }];
-      },
       tokenPool: generateTokenPool(50),
     };
     DEFAULT_PAYOUT_CONFIG = {
@@ -803,26 +796,10 @@ describe("FactoryErc1155Random", function () {
         fulfillmentSigner: FULFILLMENT_SIGNER.address,
         maxSupply: 50,
         tokenPool: generateTokenPool(50),
-        maxBatchSize: 20,
+        maxBatchSize: 200,
         affiliateFee: 1500,
+        affiliateDiscount: 1000, // 10%
         defaultRoyalty: 500,
-        discounts: {
-          affiliateDiscount: 1000, // 10%
-          mintTiers: [
-            {
-              numMints: 100,
-              mintDiscount: 2000, // 20%
-            },
-            {
-              numMints: 20,
-              mintDiscount: 1000, // 10%
-            },
-            {
-              numMints: 5,
-              mintDiscount: 500, // 5%
-            },
-          ],
-        },
       },
       DEFAULT_PAYOUT_CONFIG
     );
@@ -831,18 +808,45 @@ describe("FactoryErc1155Random", function () {
 
     const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = ArchetypeErc1155Random.attach(newCollectionAddress);
+    const nft = asContractType<ArchetypeErc1155Random>(
+      ArchetypeErc1155Random.attach(newCollectionAddress)
+    );
 
-    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
-      price: ethers.parseEther("0.1"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-      end: 0,
-      limit: 300,
-      maxSupply: 5000,
-      unitSize: 0,
-      tokenIdsExcluded: [],
-      tokenAddress: ZERO,
-    });
+    await nft.connect(owner).setBonusInvite(
+      ethers.ZeroHash,
+      ipfsh.ctod(CID_ZERO),
+      {
+        price: ethers.parseEther("0.1"),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+        end: 0,
+        limit: 300,
+        maxSupply: 5000,
+        unitSize: 0,
+        tokenIdsExcluded: [],
+        tokenAddress: ZERO,
+        reservePrice: 0,
+        delta: 0,
+        interval: 0,
+      },
+      [
+        {
+          numMints: 20,
+          numBonusMints: 12,
+        },
+        {
+          numMints: 15,
+          numBonusMints: 6,
+        },
+        {
+          numMints: 10,
+          numBonusMints: 3,
+        },
+        {
+          numMints: 1,
+          numBonusMints: 1,
+        },
+      ]
+    );
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -853,6 +857,7 @@ describe("FactoryErc1155Random", function () {
 
     const { seedHash, seed, signature } = await generateSeedHash();
 
+    // get 1 free
     await nft
       .connect(accountZero)
       .mint(
@@ -872,6 +877,9 @@ describe("FactoryErc1155Random", function () {
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
       ethers.parseEther("0.0135")
     ); // 15%
+    await expect(await nft.totalSupply()).to.equal(2);
+
+    await nft.fulfillRandomMint(seed, signature);
 
     // reset balances by withdrawing
     await nft.connect(platform).withdraw();
@@ -883,27 +891,46 @@ describe("FactoryErc1155Random", function () {
       signature: signatureTwo,
     } = await generateSeedHash();
 
+    // get 3 free
     await nft
       .connect(accountZero)
       .mint(
         { key: ethers.ZeroHash, proof: [] },
-        20,
+        11,
         affiliate.address,
         referral,
         seedHashTwo,
         {
-          value: ethers.parseEther((0.081 * 20).toString()), // 10 % discount from using an affiliate, additional 10% for minting 20 = 0.081 per
+          value: ethers.parseEther((0.1 * 11).toString()),
         }
       );
 
-    await expect(await nft.computePrice(ethers.ZeroHash, 20, true)).to.equal(
-      ethers.parseEther((0.081 * 20).toString())
-    );
+    await expect(await nft.totalSupply()).to.equal(16);
 
-    await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("1.377")); // 85%
-    await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.parseEther("0.243")
-    ); // 15%
+    const {
+      seedHash: seedHashThree,
+      seed: seedThree,
+      signature: signatureThree,
+    } = await generateSeedHash();
+
+    // get 12 free
+    await nft
+      .connect(accountZero)
+      .mint(
+        { key: ethers.ZeroHash, proof: [] },
+        22,
+        affiliate.address,
+        referral,
+        seedHashThree,
+        {
+          value: ethers.parseEther((0.1 * 22).toString()),
+        }
+      );
+
+    await expect(await nft.totalSupply()).to.equal(50);
+
+    await nft.fulfillRandomMint(seedTwo, signatureTwo);
+    await nft.fulfillRandomMint(seedThree, signatureThree);
   });
 
   it("should withdraw and credit correct amount - super affiliate", async function () {
@@ -1049,11 +1076,8 @@ describe("FactoryErc1155Random", function () {
         tokenPool: generateTokenPool(50),
         maxBatchSize: 20,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
-        discounts: {
-          affiliateDiscount: 0, // 10%
-          mintTiers: [],
-        },
       },
       {
         ownerBps: 9000,
@@ -1256,33 +1280,16 @@ describe("FactoryErc1155Random", function () {
     await expect((await nft.connect(owner).config()).affiliateFee).to.be.equal(
       1000
     );
+    // CHANGE AFFILIATE DISCOUNT
+    await nft.connect(owner).setAffiliateDiscount(1000);
+    await expect(
+      (
+        await nft.connect(owner).config()
+      ).affiliateDiscount
+    ).to.be.equal(1000);
     await nft.connect(owner).lockAffiliateFee("forever");
     await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
-
-    // CHANGE DISCOUNTS
-    const discount = {
-      affiliateDiscount: 2000,
-      mintTiers: [
-        {
-          numMints: 10,
-          mintDiscount: 2000,
-        },
-        {
-          numMints: 5,
-          mintDiscount: 1000,
-        },
-      ],
-    };
-    await nft.connect(owner).setDiscounts(discount);
-    const _discount = Object.values(discount);
-    discount.mintTiers.forEach((obj, i) => {
-      _discount[1][i] = Object.values(obj);
-    });
-    await expect((await nft.connect(owner).config()).discounts).to.deep.equal(
-      _discount
-    );
-    await nft.connect(owner).lockDiscounts("forever");
-    await expect(nft.connect(owner).setDiscounts(discount)).to.be.reverted;
+    await expect(nft.connect(owner).setAffiliateDiscount(20)).to.be.reverted;
   });
 
   // it("test burn to mint functionality", async function () {

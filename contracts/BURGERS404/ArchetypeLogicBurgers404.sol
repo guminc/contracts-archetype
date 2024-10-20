@@ -55,14 +55,9 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct VolumeBonusTier {
-  uint32 numMints;
-  uint32 numFreeMints;
-}
-
-struct VolumeDiscount {
-  uint16 affiliateDiscount; // BPS
-  VolumeBonusTier[] volumeTiers;
+struct BonusDiscount {
+  uint16 numMints;
+  uint16 numBonusMints;
 }
 
 struct Config {
@@ -71,10 +66,10 @@ struct Config {
   uint32 maxSupply; // in erc20
   uint32 maxBatchSize; // in erc20
   uint16 affiliateFee; //BPS
+  uint16 affiliateDiscount; // BPS
   uint16 defaultRoyalty; //BPS
   uint16 remintPremium; //BPS premium for burning and reminting a new token
   uint16 erc20Ratio; // number of erc20 (10**18) equal to one nft
-  VolumeDiscount volumeDiscounts;
 }
 
 struct PayoutConfig {
@@ -91,7 +86,6 @@ struct Options {
   bool uriLocked;
   bool maxSupplyLocked;
   bool affiliateFeeLocked;
-  bool discountsLocked;
   bool ownerAltPayoutLocked;
 }
 
@@ -147,7 +141,7 @@ library ArchetypeLogicBurgers404 {
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
     AdvancedInvite storage invite,
-    VolumeDiscount storage volumeDiscounts,
+    uint16 affiliateDiscount,
     uint256 numTokens,
     uint256 listSupply,
     bool affiliateUsed
@@ -180,19 +174,25 @@ library ArchetypeLogicBurgers404 {
     }
 
     if (affiliateUsed) {
-      cost = cost - ((cost * volumeDiscounts.affiliateDiscount) / 10000);
+      cost = cost - ((cost * affiliateDiscount) / 10000);
     }
 
     return cost;
   }
 
-  function freeMintsAwarded(uint256 numNfts, VolumeDiscount storage volumeDiscount) internal view returns (uint256){
-    uint256 numMints = volumeDiscount.volumeTiers.length;
-    for (uint16 i; i < numMints; i++ ) {
-      uint256 tierNumMints = volumeDiscount.volumeTiers[i].numMints;
-      if (numNfts >= tierNumMints) {
-        return volumeDiscount.volumeTiers[i].numFreeMints;
-      }
+  function bonusMintsAwarded(uint256 numNfts, uint256 packedDiscount) internal pure returns (uint256) {
+    for (uint8 i = 0; i < 8; i++) {
+        uint32 discount = uint32((packedDiscount >> (32 * i)) & 0xFFFFFFFF);
+        uint16 tierNumMints = uint16(discount >> 16);
+        uint16 tierBonusMints = uint16(discount);
+        
+        if (tierNumMints == 0) {
+            break; // End of valid discounts
+        }
+        
+        if (numNfts >= tierNumMints) {
+            return tierBonusMints;
+        }
     }
     return 0;
   }

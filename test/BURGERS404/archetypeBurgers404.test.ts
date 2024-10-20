@@ -80,17 +80,10 @@ describe("Factory", function () {
       maxSupply: 5000 * ERC20RATIO,
       maxBatchSize: 100 * ERC20RATIO,
       affiliateFee: 1500,
+      affiliateDiscount: 0,
       defaultRoyalty: 500,
       erc20Ratio: ERC20RATIO,
       remintPremium: 2000, // 20%
-      volumeDiscounts: {
-        affiliateDiscount: 0,
-        volumeTiers: [],
-        // [{
-        //   numMints: number;
-        //   mintDiscount: number;
-        // }];
-      },
     };
     DEFAULT_PAYOUT_CONFIG = {
       ownerBps: 9500,
@@ -690,26 +683,10 @@ describe("Factory", function () {
         maxSupply: 5000 * ERC20RATIO,
         maxBatchSize: 100 * ERC20RATIO,
         affiliateFee: 1500,
+        affiliateDiscount: 1000, // 10%
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 2000,
-        volumeDiscounts: {
-          affiliateDiscount: 1000, // 10%
-          volumeTiers: [
-            {
-              numMints: 20,
-              numFreeMints: 10,
-            },
-            {
-              numMints: 10,
-              numFreeMints: 4,
-            },
-            {
-              numMints: 3,
-              numFreeMints: 1,
-            },
-          ],
-        },
       },
       DEFAULT_PAYOUT_CONFIG
     );
@@ -722,16 +699,37 @@ describe("Factory", function () {
       ArchetypeBurgers404.attach(newCollectionAddress)
     );
 
-    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
-      price: ethers.parseEther("0.0001"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
-      end: 0,
-      limit: 300 * ERC20RATIO,
-      maxSupply: DEFAULT_CONFIG.maxSupply,
-      unitSize: 0,
-      tokenAddress: ZERO,
-      isBlacklist: false,
-    });
+    await nft.connect(owner).setBonusInvite(
+      ethers.ZeroHash,
+      ipfsh.ctod(CID_ZERO),
+      {
+        price: ethers.parseEther("0.0001"),
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+        end: 0,
+        limit: 300 * ERC20RATIO,
+        maxSupply: DEFAULT_CONFIG.maxSupply,
+        unitSize: 0,
+        tokenAddress: ZERO,
+        isBlacklist: false,
+        reservePrice: 0,
+        delta: 0,
+        interval: 0,
+      },
+      [
+        {
+          numMints: 20,
+          numBonusMints: 10,
+        },
+        {
+          numMints: 10,
+          numBonusMints: 4,
+        },
+        {
+          numMints: 3,
+          numBonusMints: 1,
+        },
+      ]
+    );
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -815,13 +813,10 @@ describe("Factory", function () {
         maxSupply: 5000 * ERC20RATIO,
         maxBatchSize: 100 * ERC20RATIO,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 0,
-        volumeDiscounts: {
-          affiliateDiscount: 0,
-          volumeTiers: [],
-        },
       },
       {
         ownerBps: 9000,
@@ -931,13 +926,10 @@ describe("Factory", function () {
         maxSupply: 5000,
         maxBatchSize: 20,
         affiliateFee: 1500,
+        affiliateDiscount: 0,
         defaultRoyalty: 500,
         erc20Ratio: ERC20RATIO,
         remintPremium: 2000,
-        volumeDiscounts: {
-          affiliateDiscount: 0, // 10%
-          volumeTiers: [],
-        },
       },
       {
         ownerBps: 9000,
@@ -1125,36 +1117,18 @@ describe("Factory", function () {
     await expect((await nft.connect(owner).config()).affiliateFee).to.be.equal(
       1000
     );
-    await nft.connect(owner).lockAffiliateFee();
-    await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
 
-    // CHANGE DISCOUNTS
-    const volumeDiscounts = {
-      affiliateDiscount: 2000,
-      volumeTiers: [
-        {
-          numMints: 10,
-          numFreeMints: 4,
-        },
-        {
-          numMints: 5,
-          numFreeMints: 1,
-        },
-      ],
-    };
-    await nft.connect(owner).setDiscounts(volumeDiscounts);
-    const _discount = Object.values(volumeDiscounts);
-    volumeDiscounts.volumeTiers.forEach((obj, i) => {
-      _discount[1][i] = Object.values(obj);
-    });
+    // CHANGE AFFILIATE DISCOUNT
+    await nft.connect(owner).setAffiliateDiscount(1000);
     await expect(
       (
         await nft.connect(owner).config()
-      ).volumeDiscounts
-    ).to.deep.equal(_discount);
-    await nft.connect(owner).lockDiscounts();
-    await expect(nft.connect(owner).setDiscounts(volumeDiscounts)).to.be
-      .reverted;
+      ).affiliateDiscount
+    ).to.be.equal(1000);
+
+    await nft.connect(owner).lockAffiliateFee();
+    await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
+    await expect(nft.connect(owner).setAffiliateDiscount(20)).to.be.reverted;
   });
 
   // it("test burn to mint functionality", async function () {
@@ -1320,7 +1294,9 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.logs[0].address || "";
-    const nftMint = ArchetypeBurgers404.attach(newCollectionAddressMint);
+    const nftMint = asContractType<ArchetypeBurgers404>(
+      ArchetypeBurgers404.attach(newCollectionAddressMint)
+    );
 
     await nftMint
       .connect(owner)
@@ -1417,6 +1393,24 @@ describe("Factory", function () {
     const change = (ERC20RATIO * DEFAULT_CONFIG.remintPremium) / 10000;
     const burnToRemintSupplyBump =
       (3 * ERC20RATIO + (ERC20RATIO - change * 1)) * ERC20UNIT;
+
+    // make sure free mints are counted in max supply
+    await nftMint.setBonusDiscounts(ethers.ZeroHash, [
+      { numMints: 1, numBonusMints: 1 },
+    ]);
+
+    // free mint will make max supply exceed
+    await expect(
+      nftMint
+        .connect(minter)
+        .mint({ key: ethers.ZeroHash, proof: [] }, 1 * ERC20RATIO, ZERO, "0x", {
+          value: 0,
+        })
+    ).to.be.revertedWithCustomError(archetypeLogic, "MaxSupplyExceeded");
+
+    await nftMint.setBonusDiscounts(ethers.ZeroHash, [
+      { numMints: 0, numBonusMints: 0 },
+    ]);
 
     // mint last nft
     await nftMint

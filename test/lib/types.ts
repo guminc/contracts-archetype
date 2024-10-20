@@ -4,14 +4,8 @@ export type IArchetypeErc721aConfig = {
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
+  affiliateDiscount: number;
   defaultRoyalty: number;
-  discounts: {
-    affiliateDiscount: number;
-    mintTiers: {
-      numMints: number;
-      mintDiscount: number;
-    }[];
-  };
 };
 
 export type IArchetypeBurgers404Config = {
@@ -20,16 +14,10 @@ export type IArchetypeBurgers404Config = {
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
+  affiliateDiscount: number;
   defaultRoyalty: number;
   remintPremium: number;
   erc20Ratio: number;
-  volumeDiscounts: {
-    affiliateDiscount: number;
-    volumeTiers: {
-      numMints: number;
-      numFreeMints: number;
-    }[];
-  };
 };
 
 export type IArchetypeErc1155RandomConfig = {
@@ -39,14 +27,8 @@ export type IArchetypeErc1155RandomConfig = {
   maxSupply: number;
   maxBatchSize: number;
   affiliateFee: number;
+  affiliateDiscount: number;
   defaultRoyalty: number;
-  discounts: {
-    affiliateDiscount: number;
-    mintTiers: {
-      numMints: number;
-      mintDiscount: number;
-    }[];
-  };
   tokenPool: number[];
 };
 
