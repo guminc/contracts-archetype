@@ -30,8 +30,8 @@ async function main() {
       maxSupply: 5000,
       maxBatchSize: 20,
       affiliateFee: 1500,
+      affiliateDiscount: 0,
       defaultRoyalty: 500,
-      discounts: { affiliateDiscount: 0, mintTiers: [] },
     },
     {
       ownerBps: 9500,

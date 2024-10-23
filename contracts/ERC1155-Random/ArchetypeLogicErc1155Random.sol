@@ -202,7 +202,7 @@ library ArchetypeLogicErc1155Random {
         }
 
         if (numNfts >= tierNumMints) {
-            return tierBonusMints;
+            return (numNfts / tierNumMints) * tierBonusMints;
         }
     }
     return 0;

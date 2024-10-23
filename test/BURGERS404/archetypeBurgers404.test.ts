@@ -755,7 +755,7 @@ describe("Factory", function () {
       await nft.connect(accountZero).balanceOf(accountZero.address)
     ).to.equal(BigInt(4500) * BigInt(ERC20UNIT));
 
-    // mint 8.2 nfts should get one free
+    // mint 8.2 nfts should get two free
     await nft
       .connect(accountZero)
       .mint(
@@ -771,7 +771,7 @@ describe("Factory", function () {
     expect(
       await nft.connect(accountZero).balanceOf(accountZero.address)
     ).to.equal(
-      BigInt(4500) * BigInt(ERC20UNIT) + BigInt(9200) * BigInt(ERC20UNIT)
+      BigInt(4500) * BigInt(ERC20UNIT) + BigInt(10200) * BigInt(ERC20UNIT)
     );
 
     // mint 21 nfts should get ten free

@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Milkshake 404 Info</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.10.0/web3.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        padding: 20px;
+      }
+      h1,
+      h2 {
+        color: #333;
+      }
+      #tokenInfo {
+        background-color: #f4f4f4;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+      }
+      .info-item {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Milkshake 404</h1>
+
+    <div id="tokenInfo">
+      <h2>Token Information</h2>
+      <div class="info-item"></div>
+      <div class="info-item">
+        Token Address: 0x335b87CE157b2408248c0da05b224451Cfd26457
+      </div>
+      <a
+        href="https://polygonscan.com/address/0x335b87CE157b2408248c0da05b224451Cfd26457"
+        target="_blank"
+        >View on Polygonscan</a
+      >
+      <br />
+      <a href="https://opensea.io/collection/milkshake-404" target="_blank"
+        >View on Opensea</a
+      >
+      <br />
+      <a
+        href="https://magiceden.io/collections/polygon/0x335b87ce157b2408248c0da05b224451cfd26457"
+        target="_blank"
+        >View on MagicEden</a
+      >
+      <br />
+      <a
+        href="https://www.sushi.com/polygon/swap?token0=NATIVE&token1=0x335b87CE157b2408248c0da05b224451Cfd26457"
+        target="_blank"
+        >View on SushiSwap</a
+      ><br />
+      <a
+        href="https://www.dextools.io/app/en/polygon/pair-explorer/0xf481d8d93136aa46f897e97c869b36483c1497d4?t=1729460851671"
+        target="_blank"
+        >View on Dextools</a
+      ><br />
+      <div class="info-item">
+        ERC20 Minted: <span id="numErc20Minted">Loading...</span>
+      </div>
+      <div class="info-item">
+        NFT Minted: <span id="numNftMinted">Loading...</span>
+      </div>
+      <div class="info-item">
+        Total Supply: <span id="totalSupply">Loading...</span>
+      </div>
+      <div class="info-item">
+        Burned Supply: <span id="burnedSupply">Loading...</span>
+      </div>
+      <div class="info-item">
+        Circ Supply: <span id="circSupply">Loading...</span>
+      </div>
+      <div class="info-item">
+        Next Token ID: <span id="nextTokenId">Loading...</span>
+      </div>
+      <div class="info-item">
+        Your Address: <span id="yourAddress">Loading...</span>
+      </div>
+      <div class="info-item">
+        Your Balance: <span id="yourBalance">Loading...</span>
+      </div>
+    </div>
+
+    <iframe
+      theme="dark"
+      chartResolution="1d"
+      id="dextools-widget"
+      title="Milkshake 404 Trading Chart"
+      width="1000"
+      height="700"
+      src="https://www.dextools.io/widget-chart/en/polygon/pe-light/0xf481d8d93136aa46f897e97c869b36483c1497d4?&chartType=2&drawingToolbars=false"
+    ></iframe>
+
+    <iframe
+      id="dextswap-aggregator-widget"
+      title="DEXTswap Aggregator"
+      width="400"
+      height="700"
+      src="https://www.dextools.io/widget-aggregator/en/swap/polygon/0x335b87ce157b2408248c0da05b224451cfd26457"
+    ></iframe>
+
+    <script>
+      const contractAddress = "0x335b87CE157b2408248c0da05b224451Cfd26457";
+      const burnAddress = "0x000000000000000000000000000000000000dEaD";
+      const abi = [
+        { inputs: [], name: "ArrayLengthsMismatch", type: "error" },
+        { inputs: [], name: "DNAlreadyInitialized", type: "error" },
+        { inputs: [], name: "DNNotInitialized", type: "error" },
+        { inputs: [], name: "FnSelectorNotRecognized", type: "error" },
+        { inputs: [], name: "InsufficientAllowance", type: "error" },
+        { inputs: [], name: "InsufficientBalance", type: "error" },
+        { inputs: [], name: "InvalidConfig", type: "error" },
+        { inputs: [], name: "InvalidNFTAmount", type: "error" },
+        { inputs: [], name: "InvalidSplitShares", type: "error" },
+        { inputs: [], name: "InvalidUnit", type: "error" },
+        { inputs: [], name: "LockedForever", type: "error" },
+        { inputs: [], name: "MaxSupplyExceeded", type: "error" },
+        { inputs: [], name: "NotApprovedToTransfer", type: "error" },
+        { inputs: [], name: "NotOwner", type: "error" },
+        { inputs: [], name: "NotOwnerNorApproved", type: "error" },
+        { inputs: [], name: "TotalSupplyOverflow", type: "error" },
+        { inputs: [], name: "TransferFailed", type: "error" },
+        { inputs: [], name: "TransferFromIncorrectOwner", type: "error" },
+        {
+          inputs: [],
+          name: "TransferToNonERC1155ReceiverImplementer",
+          type: "error",
+        },
+        { inputs: [], name: "TransferToZeroAddress", type: "error" },
+        { inputs: [], name: "URIQueryForNonexistentToken", type: "error" },
+        { inputs: [], name: "WrongPassword", type: "error" },
+        { inputs: [], name: "burnToRemintDisabled", type: "error" },
+        { inputs: [], name: "invalidTokenIdLength", type: "error" },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "Approval",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "operator",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bool",
+              name: "isApproved",
+              type: "bool",
+            },
+          ],
+          name: "ApprovalForAll",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint8",
+              name: "version",
+              type: "uint8",
+            },
+          ],
+          name: "Initialized",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "bytes32",
+              name: "key",
+              type: "bytes32",
+            },
+            {
+              indexed: true,
+              internalType: "bytes32",
+              name: "cid",
+              type: "bytes32",
+            },
+          ],
+          name: "Invited",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "id",
+              type: "uint256",
+            },
+          ],
+          name: "OwnedCheckpointSet",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "affiliate",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "token",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint128",
+              name: "wad",
+              type: "uint128",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "numMints",
+              type: "uint256",
+            },
+          ],
+          name: "Referral",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bool",
+              name: "status",
+              type: "bool",
+            },
+          ],
+          name: "SkipNFTSet",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "Transfer",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "operator",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256[]",
+              name: "ids",
+              type: "uint256[]",
+            },
+            {
+              indexed: false,
+              internalType: "uint256[]",
+              name: "amounts",
+              type: "uint256[]",
+            },
+          ],
+          name: "TransferBatch",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "operator",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "id",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "TransferSingle",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "string",
+              name: "value",
+              type: "string",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "id",
+              type: "uint256",
+            },
+          ],
+          name: "URI",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "src",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "token",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint128",
+              name: "wad",
+              type: "uint128",
+            },
+          ],
+          name: "Withdrawal",
+          type: "event",
+        },
+        { stateMutability: "payable", type: "fallback" },
+        {
+          inputs: [
+            { internalType: "address", name: "affiliate", type: "address" },
+          ],
+          name: "affiliateBalance",
+          outputs: [{ internalType: "uint128", name: "", type: "uint128" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "affiliate", type: "address" },
+            { internalType: "address", name: "token", type: "address" },
+          ],
+          name: "affiliateBalanceToken",
+          outputs: [{ internalType: "uint128", name: "", type: "uint128" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "owner", type: "address" },
+            { internalType: "address", name: "spender", type: "address" },
+          ],
+          name: "allowance",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "spender", type: "address" },
+            { internalType: "uint256", name: "amount", type: "uint256" },
+          ],
+          name: "approve",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "address", name: "owner", type: "address" }],
+          name: "balanceOf",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "address", name: "owner", type: "address" }],
+          name: "balanceOfNFT",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              components: [
+                { internalType: "bytes32", name: "key", type: "bytes32" },
+                { internalType: "bytes32[]", name: "proof", type: "bytes32[]" },
+              ],
+              internalType: "struct Auth",
+              name: "auth",
+              type: "tuple",
+            },
+            { internalType: "address[]", name: "toList", type: "address[]" },
+            {
+              internalType: "uint256[]",
+              name: "quantityList",
+              type: "uint256[]",
+            },
+            { internalType: "address", name: "affiliate", type: "address" },
+            { internalType: "bytes", name: "signature", type: "bytes" },
+          ],
+          name: "batchMintTo",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint256[]", name: "tokenIds", type: "uint256[]" },
+          ],
+          name: "burnToRemint",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "bytes32", name: "key", type: "bytes32" },
+            { internalType: "uint256", name: "quantity", type: "uint256" },
+            { internalType: "bool", name: "affiliateUsed", type: "bool" },
+          ],
+          name: "computePrice",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "config",
+          outputs: [
+            { internalType: "string", name: "baseUri", type: "string" },
+            {
+              internalType: "address",
+              name: "affiliateSigner",
+              type: "address",
+            },
+            { internalType: "uint32", name: "maxSupply", type: "uint32" },
+            { internalType: "uint32", name: "maxBatchSize", type: "uint32" },
+            { internalType: "uint16", name: "affiliateFee", type: "uint16" },
+            {
+              internalType: "uint16",
+              name: "affiliateDiscount",
+              type: "uint16",
+            },
+            { internalType: "uint16", name: "defaultRoyalty", type: "uint16" },
+            { internalType: "uint16", name: "remintPremium", type: "uint16" },
+            { internalType: "uint16", name: "erc20Ratio", type: "uint16" },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "decimals",
+          outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+          stateMutability: "pure",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "uint256", name: "id", type: "uint256" }],
+          name: "exists",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "address", name: "owner", type: "address" }],
+          name: "getOwnedCheckpoint",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "address", name: "owner", type: "address" }],
+          name: "getSkipNFT",
+          outputs: [{ internalType: "bool", name: "result", type: "bool" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "string", name: "name_", type: "string" },
+            { internalType: "string", name: "symbol_", type: "string" },
+            {
+              components: [
+                { internalType: "string", name: "baseUri", type: "string" },
+                {
+                  internalType: "address",
+                  name: "affiliateSigner",
+                  type: "address",
+                },
+                { internalType: "uint32", name: "maxSupply", type: "uint32" },
+                {
+                  internalType: "uint32",
+                  name: "maxBatchSize",
+                  type: "uint32",
+                },
+                {
+                  internalType: "uint16",
+                  name: "affiliateFee",
+                  type: "uint16",
+                },
+                {
+                  internalType: "uint16",
+                  name: "affiliateDiscount",
+                  type: "uint16",
+                },
+                {
+                  internalType: "uint16",
+                  name: "defaultRoyalty",
+                  type: "uint16",
+                },
+                {
+                  internalType: "uint16",
+                  name: "remintPremium",
+                  type: "uint16",
+                },
+                { internalType: "uint16", name: "erc20Ratio", type: "uint16" },
+              ],
+              internalType: "struct Config",
+              name: "config_",
+              type: "tuple",
+            },
+            {
+              components: [
+                { internalType: "uint16", name: "ownerBps", type: "uint16" },
+                { internalType: "uint16", name: "platformBps", type: "uint16" },
+                { internalType: "uint16", name: "partnerBps", type: "uint16" },
+                {
+                  internalType: "uint16",
+                  name: "superAffiliateBps",
+                  type: "uint16",
+                },
+                { internalType: "address", name: "partner", type: "address" },
+                {
+                  internalType: "address",
+                  name: "superAffiliate",
+                  type: "address",
+                },
+                {
+                  internalType: "address",
+                  name: "ownerAltPayout",
+                  type: "address",
+                },
+              ],
+              internalType: "struct PayoutConfig",
+              name: "payoutConfig_",
+              type: "tuple",
+            },
+            { internalType: "address", name: "_receiver", type: "address" },
+          ],
+          name: "initialize",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+          name: "invites",
+          outputs: [
+            { internalType: "uint128", name: "price", type: "uint128" },
+            { internalType: "uint128", name: "reservePrice", type: "uint128" },
+            { internalType: "uint128", name: "delta", type: "uint128" },
+            { internalType: "uint32", name: "maxSupply", type: "uint32" },
+            { internalType: "uint32", name: "limit", type: "uint32" },
+            { internalType: "uint32", name: "start", type: "uint32" },
+            { internalType: "uint32", name: "end", type: "uint32" },
+            { internalType: "uint32", name: "interval", type: "uint32" },
+            { internalType: "uint32", name: "unitSize", type: "uint32" },
+            { internalType: "address", name: "tokenAddress", type: "address" },
+            { internalType: "bool", name: "isBlacklist", type: "bool" },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "owner", type: "address" },
+            { internalType: "address", name: "operator", type: "address" },
+          ],
+          name: "isApprovedForAll",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "bytes32", name: "key", type: "bytes32" }],
+          name: "listSupply",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "lockAffiliateFee",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "string", name: "password", type: "string" },
+          ],
+          name: "lockMaxSupply",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "lockOwnerAltPayout",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "string", name: "password", type: "string" },
+          ],
+          name: "lockURI",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              components: [
+                { internalType: "bytes32", name: "key", type: "bytes32" },
+                { internalType: "bytes32[]", name: "proof", type: "bytes32[]" },
+              ],
+              internalType: "struct Auth",
+              name: "auth",
+              type: "tuple",
+            },
+            { internalType: "uint256", name: "quantity", type: "uint256" },
+            { internalType: "address", name: "affiliate", type: "address" },
+            { internalType: "bytes", name: "signature", type: "bytes" },
+          ],
+          name: "mint",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              components: [
+                { internalType: "bytes32", name: "key", type: "bytes32" },
+                { internalType: "bytes32[]", name: "proof", type: "bytes32[]" },
+              ],
+              internalType: "struct Auth",
+              name: "auth",
+              type: "tuple",
+            },
+            { internalType: "uint256", name: "quantity", type: "uint256" },
+            { internalType: "address", name: "to", type: "address" },
+            { internalType: "address", name: "affiliate", type: "address" },
+            { internalType: "bytes", name: "signature", type: "bytes" },
+          ],
+          name: "mintTo",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "minter", type: "address" },
+            { internalType: "bytes32", name: "key", type: "bytes32" },
+          ],
+          name: "minted",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "name",
+          outputs: [{ internalType: "string", name: "", type: "string" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "numErc20Minted",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "numNftsMinted",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "options",
+          outputs: [
+            { internalType: "bool", name: "uriLocked", type: "bool" },
+            { internalType: "bool", name: "maxSupplyLocked", type: "bool" },
+            { internalType: "bool", name: "affiliateFeeLocked", type: "bool" },
+            {
+              internalType: "bool",
+              name: "ownerAltPayoutLocked",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [{ internalType: "address", name: "", type: "address" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "ownerBalance",
+          outputs: [{ internalType: "uint128", name: "", type: "uint128" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "address", name: "token", type: "address" }],
+          name: "ownerBalanceToken",
+          outputs: [{ internalType: "uint128", name: "", type: "uint128" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "owner", type: "address" },
+            { internalType: "uint256", name: "id", type: "uint256" },
+          ],
+          name: "owns",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+          name: "packedBonusDiscounts",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "payoutConfig",
+          outputs: [
+            { internalType: "uint16", name: "ownerBps", type: "uint16" },
+            { internalType: "uint16", name: "platformBps", type: "uint16" },
+            { internalType: "uint16", name: "partnerBps", type: "uint16" },
+            {
+              internalType: "uint16",
+              name: "superAffiliateBps",
+              type: "uint16",
+            },
+            { internalType: "address", name: "partner", type: "address" },
+            {
+              internalType: "address",
+              name: "superAffiliate",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "ownerAltPayout",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "platform",
+          outputs: [{ internalType: "address", name: "", type: "address" }],
+          stateMutability: "pure",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint256", name: "tokenId", type: "uint256" },
+            { internalType: "uint256", name: "salePrice", type: "uint256" },
+          ],
+          name: "royaltyInfo",
+          outputs: [
+            { internalType: "address", name: "", type: "address" },
+            { internalType: "uint256", name: "", type: "uint256" },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "from", type: "address" },
+            { internalType: "address", name: "to", type: "address" },
+            { internalType: "uint256[]", name: "ids", type: "uint256[]" },
+            { internalType: "bytes", name: "data", type: "bytes" },
+          ],
+          name: "safeBatchTransferNFTs",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "from", type: "address" },
+            { internalType: "address", name: "to", type: "address" },
+            { internalType: "uint256", name: "id", type: "uint256" },
+            { internalType: "bytes", name: "data", type: "bytes" },
+          ],
+          name: "safeTransferNFT",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "bytes32", name: "_key", type: "bytes32" },
+            { internalType: "bytes32", name: "_cid", type: "bytes32" },
+            {
+              components: [
+                { internalType: "uint128", name: "price", type: "uint128" },
+                {
+                  internalType: "uint128",
+                  name: "reservePrice",
+                  type: "uint128",
+                },
+                { internalType: "uint128", name: "delta", type: "uint128" },
+                { internalType: "uint32", name: "maxSupply", type: "uint32" },
+                { internalType: "uint32", name: "limit", type: "uint32" },
+                { internalType: "uint32", name: "start", type: "uint32" },
+                { internalType: "uint32", name: "end", type: "uint32" },
+                { internalType: "uint32", name: "interval", type: "uint32" },
+                { internalType: "uint32", name: "unitSize", type: "uint32" },
+                {
+                  internalType: "address",
+                  name: "tokenAddress",
+                  type: "address",
+                },
+                { internalType: "bool", name: "isBlacklist", type: "bool" },
+              ],
+              internalType: "struct AdvancedInvite",
+              name: "_AdvancedInvite",
+              type: "tuple",
+            },
+          ],
+          name: "setAdvancedInvite",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint16",
+              name: "affiliateDiscount",
+              type: "uint16",
+            },
+          ],
+          name: "setAffiliateDiscount",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint16", name: "affiliateFee", type: "uint16" },
+          ],
+          name: "setAffiliateFee",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "operator", type: "address" },
+            { internalType: "bool", name: "isApproved", type: "bool" },
+          ],
+          name: "setApprovalForAll",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "string", name: "baseUri", type: "string" }],
+          name: "setBaseURI",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "bytes32", name: "_key", type: "bytes32" },
+            {
+              components: [
+                { internalType: "uint16", name: "numMints", type: "uint16" },
+                {
+                  internalType: "uint16",
+                  name: "numBonusMints",
+                  type: "uint16",
+                },
+              ],
+              internalType: "struct BonusDiscount[]",
+              name: "_bonusDiscounts",
+              type: "tuple[]",
+            },
+          ],
+          name: "setBonusDiscounts",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "bytes32", name: "_key", type: "bytes32" },
+            { internalType: "bytes32", name: "_cid", type: "bytes32" },
+            {
+              components: [
+                { internalType: "uint128", name: "price", type: "uint128" },
+                {
+                  internalType: "uint128",
+                  name: "reservePrice",
+                  type: "uint128",
+                },
+                { internalType: "uint128", name: "delta", type: "uint128" },
+                { internalType: "uint32", name: "maxSupply", type: "uint32" },
+                { internalType: "uint32", name: "limit", type: "uint32" },
+                { internalType: "uint32", name: "start", type: "uint32" },
+                { internalType: "uint32", name: "end", type: "uint32" },
+                { internalType: "uint32", name: "interval", type: "uint32" },
+                { internalType: "uint32", name: "unitSize", type: "uint32" },
+                {
+                  internalType: "address",
+                  name: "tokenAddress",
+                  type: "address",
+                },
+                { internalType: "bool", name: "isBlacklist", type: "bool" },
+              ],
+              internalType: "struct AdvancedInvite",
+              name: "_advancedInvite",
+              type: "tuple",
+            },
+            {
+              components: [
+                { internalType: "uint16", name: "numMints", type: "uint16" },
+                {
+                  internalType: "uint16",
+                  name: "numBonusMints",
+                  type: "uint16",
+                },
+              ],
+              internalType: "struct BonusDiscount[]",
+              name: "_bonusDiscount",
+              type: "tuple[]",
+            },
+          ],
+          name: "setBonusInvite",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "receiver", type: "address" },
+            { internalType: "uint16", name: "feeNumerator", type: "uint16" },
+          ],
+          name: "setDefaultRoyalty",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "bytes32", name: "_key", type: "bytes32" },
+            { internalType: "bytes32", name: "_cid", type: "bytes32" },
+            {
+              components: [
+                { internalType: "uint128", name: "price", type: "uint128" },
+                { internalType: "uint32", name: "maxSupply", type: "uint32" },
+                { internalType: "uint32", name: "limit", type: "uint32" },
+                { internalType: "uint32", name: "start", type: "uint32" },
+                { internalType: "uint32", name: "end", type: "uint32" },
+                { internalType: "uint32", name: "unitSize", type: "uint32" },
+                {
+                  internalType: "address",
+                  name: "tokenAddress",
+                  type: "address",
+                },
+                { internalType: "bool", name: "isBlacklist", type: "bool" },
+              ],
+              internalType: "struct Invite",
+              name: "_invite",
+              type: "tuple",
+            },
+          ],
+          name: "setInvite",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint32", name: "maxBatchSize", type: "uint32" },
+          ],
+          name: "setMaxBatchSize",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint32", name: "maxSupply", type: "uint32" },
+          ],
+          name: "setMaxSupply",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "uint256", name: "id", type: "uint256" }],
+          name: "setOwnedCheckpoint",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "ownerAltPayout",
+              type: "address",
+            },
+          ],
+          name: "setOwnerAltPayout",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint16", name: "remintPremium", type: "uint16" },
+          ],
+          name: "setRemintPremium",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [{ internalType: "bool", name: "skipNFT", type: "bool" }],
+          name: "setSkipNFT",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "bytes4", name: "interfaceId", type: "bytes4" },
+          ],
+          name: "supportsInterface",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "symbol",
+          outputs: [{ internalType: "string", name: "", type: "string" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "totalSupply",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "to", type: "address" },
+            { internalType: "uint256", name: "amount", type: "uint256" },
+          ],
+          name: "transfer",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "from", type: "address" },
+            { internalType: "address", name: "to", type: "address" },
+            { internalType: "uint256", name: "amount", type: "uint256" },
+          ],
+          name: "transferFrom",
+          outputs: [{ internalType: "bool", name: "", type: "bool" }],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address", name: "newOwner", type: "address" },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "uint256", name: "tokenId", type: "uint256" },
+          ],
+          name: "uri",
+          outputs: [{ internalType: "string", name: "", type: "string" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "withdraw",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "withdrawAffiliate",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address[]", name: "tokens", type: "address[]" },
+          ],
+          name: "withdrawTokens",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            { internalType: "address[]", name: "tokens", type: "address[]" },
+          ],
+          name: "withdrawTokensAffiliate",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        { stateMutability: "payable", type: "receive" },
+      ];
+
+      async function fetchTokenInfo() {
+        if (typeof window.ethereum !== "undefined") {
+          const web3 = new Web3(window.ethereum);
+          try {
+            await window.ethereum.request({ method: "eth_requestAccounts" });
+
+            // Get the connected address
+            const accounts = await web3.eth.getAccounts();
+            const connectedAddress = accounts[0];
+            console.log("Connected address:", connectedAddress);
+
+            const contract = new web3.eth.Contract(abi, contractAddress);
+
+            const numErc20Minted = await contract.methods
+              .numErc20Minted()
+              .call();
+            const numNftMinted = await contract.methods.numNftsMinted().call();
+            const totalSupply = await contract.methods.totalSupply().call();
+            const burnedSupply = await contract.methods
+              .balanceOf(burnAddress)
+              .call();
+            const circSupply = BigInt(totalSupply) - BigInt(burnedSupply);
+            const nextTokenId =
+              BigInt(totalSupply) / BigInt(10 ** 18) / BigInt(1000) + BigInt(1);
+            const yourBalance = await contract.methods
+              .balanceOf(connectedAddress)
+              .call();
+
+            document.getElementById("numErc20Minted").textContent =
+              numErc20Minted;
+            document.getElementById("numNftMinted").textContent = numNftMinted;
+            document.getElementById("totalSupply").textContent =
+              web3.utils.fromWei(totalSupply, "ether");
+            document.getElementById("burnedSupply").textContent =
+              web3.utils.fromWei(burnedSupply, "ether");
+            document.getElementById("circSupply").textContent =
+              web3.utils.fromWei(circSupply.toString(), "ether");
+            document.getElementById("nextTokenId").textContent =
+              nextTokenId.toString();
+            document.getElementById("yourAddress").textContent =
+              connectedAddress;
+            document.getElementById("yourBalance").textContent =
+              web3.utils.fromWei(yourBalance, "ether");
+          } catch (error) {
+            console.error("Error fetching token info:", error);
+            document.getElementById("tokenInfo").innerHTML =
+              "<p>Error fetching token information. Please make sure you are connected to the Polygon network.</p>";
+          }
+        } else {
+          document.getElementById("tokenInfo").innerHTML =
+            "<p>Please install MetaMask or another Web3 provider to view token information.</p>";
+        }
+      }
+
+      fetchTokenInfo();
+    </script>
+  </body>
+</html>
