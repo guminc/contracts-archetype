@@ -8,60 +8,62 @@ function asContractType<T extends BaseContract>(contract: any): T {
 }
 
 async function main() {
-  const Factory = await ethers.getContractFactory("FactoryBurgers404");
+  // const Factory = await ethers.getContractFactory("FactoryBurgers404");
 
-  const factory = asContractType<FactoryBurgers404>(
-    Factory.attach("0xc1b131aD3166d328f8Eb54C3FCb6F7C1067f1825")
-  );
-  const factoryAddress = await factory.getAddress();
+  // const factory = asContractType<FactoryBurgers404>(
+  //   Factory.attach("0x3778BEd5e413005fA62FDc615CF7d9FaDb70B307")
+  // );
+  // const factoryAddress = await factory.getAddress();
 
-  console.log("Contract Factory is:", factoryAddress);
+  // console.log("Contract Factory is:", factoryAddress);
 
-  const [accountZero] = await ethers.getSigners();
+  // const [accountZero] = await ethers.getSigners();
 
-  const newContract = await factory.createCollection(
-    accountZero.address,
-    "test burg 404",
-    "Burgers404",
-    {
-      baseUri:
-        "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
-      affiliateSigner: "0x1f285dD528cf4cDE3081C6d48D9df7A4F8FA9383",
-      maxSupply: 50000,
-      maxBatchSize: 50000,
-      affiliateFee: 1500,
-      defaultRoyalty: 500,
-      remintPremium: 2000,
-      erc20Ratio: 1000,
-      volumeDiscounts: { affiliateDiscount: 0, volumeTiers: [] },
-    },
-    {
-      ownerBps: 9500,
-      platformBps: 500,
-      partnerBps: 0,
-      superAffiliateBps: 0,
-      partner: "0x0000000000000000000000000000000000000000",
-      superAffiliate: "0x0000000000000000000000000000000000000000",
-      ownerAltPayout: "0x0000000000000000000000000000000000000000",
-    }
-  );
+  // const ERC20RATIO = 1000;
+  // const newContract = await factory.createCollection(
+  //   accountZero.address,
+  //   "milkshake 404",
+  //   "MILK",
+  //   {
+  //     baseUri:
+  //       "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
+  //     affiliateSigner: "0x1f285dD528cf4cDE3081C6d48D9df7A4F8FA9383",
+  //     maxSupply: 25000 * ERC20RATIO,
+  //     maxBatchSize: 1000 * ERC20RATIO,
+  //     affiliateFee: 1500,
+  //     affiliateDiscount: 0,
+  //     defaultRoyalty: 500,
+  //     remintPremium: 2500, // 25%
+  //     erc20Ratio: ERC20RATIO,
+  //   },
+  //   {
+  //     ownerBps: 9500,
+  //     platformBps: 500,
+  //     partnerBps: 0,
+  //     superAffiliateBps: 0,
+  //     partner: "0x0000000000000000000000000000000000000000",
+  //     superAffiliate: "0x0000000000000000000000000000000000000000",
+  //     ownerAltPayout: "0xdB143f70eC87a1dA6C5888eEA93b63f3BA9E4DF4",
+  //   }
+  // );
 
-  console.log({ newContract });
+  // console.log({ newContract });
 
-  const result = await newContract.wait();
+  // const result = await newContract.wait();
 
-  console.log({ result });
+  // console.log({ result });
 
-  const newCollectionAddress = result.logs[0].address || "";
+  // const newCollectionAddress = result.logs[0].address || "";
+  // console.log({ newCollectionAddress });
 
-  // const newCollectionAddress = "0xb8ac799Cd21fd4782EB3B720322d5B3d2fF282a3";
+  // const newCollectionAddress = "0x335b87CE157b2408248c0da05b224451Cfd26457";
   // console.log({ newCollectionAddress });
 
   // const ArchetypeLogic = await ethers.getContractFactory(
   //   "ArchetypeLogicBurgers404"
   // );
   // const archetypeLogic = await ArchetypeLogic.attach(
-  //   "0xFAB3FF8A8F9364018AB8684502a872E7d0Cc7E22"
+  //   "0xc31a98256D3FE041C3DeF27Faa213Fa230bE7B92"
   // );
   // const Archetype = await ethers.getContractFactory("ArchetypeBurgers404", {
   //   libraries: {
@@ -72,27 +74,44 @@ async function main() {
   //   Archetype.attach(newCollectionAddress)
   // );
 
-  // await archetype.setInvite(ethers.ZeroHash, ethers.ZeroHash, {
-  //   price: ethers.parseEther("0.001") / BigInt(1000),
-  //   start: 0,
-  //   end: 0,
-  //   limit: 2 ** 32 - 1,
-  //   maxSupply: 2 ** 32 - 1,
-  //   unitSize: 1,
-  //   tokenAddress: ethers.ZeroAddress,
-  //   isBlacklist: false,
-  // });
-
-  // const res = await archetype.mint(
-  //   { key: ethers.ZeroHash, proof: [] },
-  //   10000,
-  //   ethers.ZeroAddress,
-  //   "0x",
+  // await archetype.setBonusInvite(
+  //   ethers.ZeroHash,
+  //   ethers.ZeroHash,
   //   {
-  //     value: (ethers.parseEther("0.001") / BigInt(1000)) * BigInt(10000),
-  //   }
+  //     price: ethers.parseEther("0.000001"),
+  //     start: 0,
+  //     end: 0,
+  //     limit: 2 ** 32 - 1,
+  //     maxSupply: 2 ** 32 - 1,
+  //     unitSize: 1,
+  //     tokenAddress: ethers.ZeroAddress,
+  //     isBlacklist: false,
+  //     interval: 0,
+  //     delta: 0,
+  //     reservePrice: 0,
+  //   },
+  //   [
+  //     {
+  //       numMints: 10,
+  //       numBonusMints: 4,
+  //     },
+  //     {
+  //       numMints: 3,
+  //       numBonusMints: 1,
+  //     },
+  //   ]
   // );
-  // console.log(res);
+
+  const res = await archetype.mint(
+    { key: ethers.ZeroHash, proof: [] },
+    300,
+    ethers.ZeroAddress,
+    "0x",
+    {
+      value: ethers.parseEther("0.000001") * BigInt(3000),
+    }
+  );
+  console.log(res);
 
   // await sleep(1000 * 120);
 

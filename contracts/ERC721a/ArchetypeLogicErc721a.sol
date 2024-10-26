@@ -201,7 +201,7 @@ library ArchetypeLogicErc721a {
         }
 
         if (numNfts >= tierNumMints) {
-            return tierBonusMints;
+            return (numNfts / tierNumMints) * tierBonusMints;
         }
     }
     return 0;

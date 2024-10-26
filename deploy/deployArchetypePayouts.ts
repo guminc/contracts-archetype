@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-  const ArchetypeBatch = await ethers.getContractFactory("ArchetypePayouts");
+  const ArchetypePayouts = await ethers.getContractFactory("ArchetypePayouts");
 
-  const archetypePayouts = await ArchetypeBatch.deploy();
+  const archetypePayouts = await ArchetypePayouts.deploy();
 
   const address = await archetypePayouts.getAddress();
 

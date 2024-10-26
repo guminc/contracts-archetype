@@ -767,7 +767,7 @@ describe("FactoryErc721a", function () {
     );
     expect(await nft.connect(accountZero).totalSupply()).to.equal(4);
 
-    // mint 8 nfts should get one free
+    // mint 8 nfts should get two free
     await nft
       .connect(accountZero)
       .mint(
@@ -780,7 +780,7 @@ describe("FactoryErc721a", function () {
         }
       );
 
-    expect(await nft.connect(accountZero).totalSupply()).to.equal(4 + 9);
+    expect(await nft.connect(accountZero).totalSupply()).to.equal(4 + 10);
 
     // mint 21 nfts should get ten free
     await nft
@@ -795,7 +795,7 @@ describe("FactoryErc721a", function () {
         }
       );
 
-    expect(await nft.connect(accountZero).totalSupply()).to.equal(4 + 9 + 31);
+    expect(await nft.connect(accountZero).totalSupply()).to.equal(4 + 10 + 31);
   });
 
   it("should withdraw and credit correct amount - super affiliate", async function () {

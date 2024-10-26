@@ -191,7 +191,7 @@ library ArchetypeLogicBurgers404 {
         }
         
         if (numNfts >= tierNumMints) {
-            return tierBonusMints;
+            return (numNfts / tierNumMints) * tierBonusMints;
         }
     }
     return 0;

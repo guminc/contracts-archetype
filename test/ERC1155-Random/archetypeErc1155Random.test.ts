@@ -842,7 +842,7 @@ describe("FactoryErc1155Random", function () {
           numBonusMints: 3,
         },
         {
-          numMints: 1,
+          numMints: 4,
           numBonusMints: 1,
         },
       ]
@@ -862,22 +862,22 @@ describe("FactoryErc1155Random", function () {
       .connect(accountZero)
       .mint(
         { key: ethers.ZeroHash, proof: [] },
-        1,
+        5,
         affiliate.address,
         referral,
         seedHash,
         {
-          value: ethers.parseEther("0.09"), // 10 % discount from using an affiliate = 0.9
+          value: ethers.parseEther("0.09") * BigInt(5), // 10 % discount from using an affiliate = 0.9
         }
       );
 
     await expect(await nft.ownerBalance()).to.equal(
-      ethers.parseEther("0.0765")
+      ethers.parseEther("0.0765") * BigInt(5)
     ); // 85%
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
-      ethers.parseEther("0.0135")
+      ethers.parseEther("0.0135") * BigInt(5)
     ); // 15%
-    await expect(await nft.totalSupply()).to.equal(2);
+    await expect(await nft.totalSupply()).to.equal(6);
 
     await nft.fulfillRandomMint(seed, signature);
 
@@ -891,21 +891,21 @@ describe("FactoryErc1155Random", function () {
       signature: signatureTwo,
     } = await generateSeedHash();
 
-    // get 3 free
+    // get 2 free
     await nft
       .connect(accountZero)
       .mint(
         { key: ethers.ZeroHash, proof: [] },
-        11,
+        9,
         affiliate.address,
         referral,
         seedHashTwo,
         {
-          value: ethers.parseEther((0.1 * 11).toString()),
+          value: ethers.parseEther((0.1 * 9).toString()),
         }
       );
 
-    await expect(await nft.totalSupply()).to.equal(16);
+    await expect(await nft.totalSupply()).to.equal(17);
 
     const {
       seedHash: seedHashThree,
@@ -918,7 +918,7 @@ describe("FactoryErc1155Random", function () {
       .connect(accountZero)
       .mint(
         { key: ethers.ZeroHash, proof: [] },
-        22,
+        21,
         affiliate.address,
         referral,
         seedHashThree,
