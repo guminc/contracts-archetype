@@ -200,7 +200,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
       _minted[_msgSender()][auth.key] += totalQuantity;
     }
     if (invite.maxSupply < UINT32_MAX) {
-        _listSupply[auth.key] += totalQuantity;
+      _listSupply[auth.key] += totalQuantity;
     }
     totalErc20Mints += totalQuantity;
 
