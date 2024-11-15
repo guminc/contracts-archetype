@@ -1126,9 +1126,16 @@ describe("Factory", function () {
       ).affiliateDiscount
     ).to.be.equal(1000);
 
-    await nft.connect(owner).lockAffiliateFee();
-    await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
-    await expect(nft.connect(owner).setAffiliateDiscount(20)).to.be.reverted;
+    // CHANGE OWNER ALT PAYOUT
+    await nft.connect(owner).setOwnerAltPayout(alt.address);
+    await expect(
+      (
+        await nft.connect(owner).payoutConfig()
+      ).ownerAltPayout
+    ).to.be.equal(alt.address);
+    await nft.connect(owner).lockOwnerAltPayout("forever");
+    await expect(nft.connect(owner).setOwnerAltPayout(alt.address)).to.be
+      .reverted;
   });
 
   // it("test burn to mint functionality", async function () {
@@ -3023,6 +3030,87 @@ describe("Factory", function () {
     expect(await nft.balanceOf(BURN)).to.equal(
       BigInt(3200) * BigInt(ERC20UNIT)
     );
+  });
+
+  it("test paired invite list max supply check", async function () {
+    const [accountZero, accountOne] = await ethers.getSigners();
+  
+    const owner = accountOne;
+    const minter = accountZero;
+  
+    const defaultConfig = {...DEFAULT_CONFIG}
+    defaultConfig.maxSupply = 100 * ERC20RATIO;
+    
+    const newCollection = await factory.createCollection(
+      owner.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      defaultConfig,
+      DEFAULT_PAYOUT_CONFIG
+    );
+  
+    const result = await newCollection.wait();
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeBurgers404.attach(newCollectionAddress);
+  
+    // Create two invite lists with same max supply
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1") / BigInt(ERC20RATIO),
+      start: 0,
+      end: 0,
+      limit: 50 * ERC20RATIO,
+      maxSupply: 60 * ERC20RATIO,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false
+    });
+
+    await nft.connect(owner).setInvite(HASHONE, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.05") / BigInt(ERC20RATIO), 
+      start: 0,
+      end: 0,
+      limit: 50 * ERC20RATIO,
+      maxSupply: 60 * ERC20RATIO,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false
+    });
+  
+    // Pair the two lists
+    await nft.connect(owner).setPairedInvite(ethers.ZeroHash, HASHONE);
+  
+    // Mint from first list
+    await nft.connect(minter).mint(
+      { key: ethers.ZeroHash, proof: [] },
+      40 * ERC20RATIO,
+      ZERO,
+      "0x",
+      { value: ethers.parseEther("4.0") }
+    );
+  
+    // Mint from second list
+    await nft.connect(minter).mint(
+      { key: HASHONE, proof: [] },
+      15 * ERC20RATIO,
+      ZERO,
+      "0x",
+      { value: ethers.parseEther("0.75") }
+    );
+  
+    // Try to mint past combined max supply
+    await expect(
+      nft.connect(minter).mint(
+        { key: HASHONE, proof: [] },
+        6 * ERC20RATIO,
+        ZERO,
+        "0x",
+        { value: ethers.parseEther("0.3") }
+      )
+    ).to.be.revertedWithCustomError(archetypeLogic, "ListMaxSupplyExceeded");
+  
+    expect(await nft.listSupply(ethers.ZeroHash)).to.equal(40 * ERC20RATIO);
+    expect(await nft.listSupply(HASHONE)).to.equal(15 * ERC20RATIO);
+    expect(await nft.totalSupply()).to.equal(BigInt(55) * BigInt(NFTUNIT));
   });
 });
 

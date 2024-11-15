@@ -38,13 +38,17 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   mapping(bytes32 => uint256) private _listSupply;
   mapping(address => uint128) private _ownerBalance;
   mapping(address => mapping(address => uint128)) private _affiliateBalance;
+  mapping(bytes32 => bytes32) public pairedListKeys; 
 
   string private _name;
   string private _symbol;
   uint256 private totalErc20Mints;
   Config public config;
   PayoutConfig public payoutConfig;
-  Options public options;
+  uint256 public flags;
+  // bit 0: uriLocked
+  // bit 1: maxSupplyLocked 
+  // bit 2: ownerAltPayoutLocked
 
   //
   // METHODS
@@ -168,12 +172,15 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     uint256 totalQuantity = quantity + numBonusMints;
     ValidationArgs memory args;
     {
+      bytes32 pairedKey = pairedListKeys[auth.key];
+      uint256 pairedSupply = pairedKey != 0 ? _listSupply[bytes32(uint256(pairedKey) - 1)]: 0;
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
         quantity: totalQuantity,
         curSupply: curSupply,
-        listSupply: _listSupply[auth.key]
+        listSupply: _listSupply[auth.key],
+        pairedSupply: pairedSupply
       });
     }
 
@@ -193,7 +200,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
       _minted[_msgSender()][auth.key] += totalQuantity;
     }
     if (invite.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += totalQuantity;
+        _listSupply[auth.key] += totalQuantity;
     }
     totalErc20Mints += totalQuantity;
 
@@ -305,10 +312,6 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     return _exists(id);
   }
 
-  // function findOwnedIds(address owner, uint256 lower, uint256 upper) external view returns (uint256[] memory ids){
-  //   return _findOwnedIds(owner, lower, upper);
-  // }
-
   function platform() external pure returns (address) {
     return PLATFORM;
   }
@@ -349,7 +352,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   //
 
   function setBaseURI(string memory baseUri) external _onlyOwner {
-    if (options.uriLocked) {
+    if (_getFlag(0)) {
       revert LockedForever();
     }
 
@@ -357,17 +360,14 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   }
 
   /// @notice the password is "forever"
-  function lockURI(string memory password) external _onlyOwner {
-    if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
-      revert WrongPassword();
-    }
-
-    options.uriLocked = true;
+  function lockURI(string calldata password) external _onlyOwner {
+    _checkPassword(password);
+    _setFlag(0);
   }
 
   // max supply cannot subceed total supply. Be careful changing.
   function setMaxSupply(uint32 maxSupply) external _onlyOwner {
-    if (options.maxSupplyLocked) {
+    if (_getFlag(1)) {
       revert LockedForever();
     }
 
@@ -379,18 +379,12 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   }
 
   /// @notice the password is "forever"
-  function lockMaxSupply(string memory password) external _onlyOwner {
-    if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
-      revert WrongPassword();
-    }
-
-    options.maxSupplyLocked = true;
+  function lockMaxSupply(string calldata password) external _onlyOwner {
+    _checkPassword(password);
+    _setFlag(1);
   }
 
   function setAffiliateFee(uint16 affiliateFee) external _onlyOwner {
-    if (options.affiliateFeeLocked) {
-      revert LockedForever();
-    }
     if (affiliateFee > MAXBPS) {
       revert InvalidConfig();
     }
@@ -399,9 +393,6 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
   }
 
   function setAffiliateDiscount(uint16 affiliateDiscount) external _onlyOwner {
-    if (options.affiliateFeeLocked) {
-      revert LockedForever();
-    }
     if (affiliateDiscount > MAXBPS) {
       revert InvalidConfig();
     }
@@ -409,20 +400,18 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     config.affiliateDiscount = affiliateDiscount;
   }
 
-  function lockAffiliateFee() external _onlyOwner {
-    options.affiliateFeeLocked = true;
-  }
-
   function setOwnerAltPayout(address ownerAltPayout) external _onlyOwner {
-    if (options.ownerAltPayoutLocked) {
+    if (_getFlag(2)) {
       revert LockedForever();
     }
 
     payoutConfig.ownerAltPayout = ownerAltPayout;
   }
 
-  function lockOwnerAltPayout() external _onlyOwner {
-    options.ownerAltPayoutLocked = true;
+  /// @notice the password is "forever"
+  function lockOwnerAltPayout(string calldata password) external _onlyOwner {
+    _checkPassword(password);
+    _setFlag(2);
   }
 
   function setMaxBatchSize(uint32 maxBatchSize) external _onlyOwner {
@@ -499,6 +488,15 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     emit Invited(_key, _cid);
   }
 
+  // method will pair the supplies of two invite lists
+  function setPairedInvite(bytes32 key1, bytes32 key2) external _onlyOwner {
+    if(invites[key1].maxSupply != invites[key1].maxSupply) {
+      revert InvalidConfig();
+    }
+    pairedListKeys[key1] = bytes32(uint256(key2) + 1);
+    pairedListKeys[key2] = bytes32(uint256(key1) + 1);
+  }
+
   //
   // INTERNAL
   //
@@ -523,6 +521,20 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
     if (!success) {
       revert TransferFailed();
     }
+  }
+
+  function _checkPassword(string calldata password) internal pure {
+    if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
+      revert WrongPassword();
+    }
+  }
+
+  function _setFlag(uint256 flag) internal {
+    flags |= 1 << flag;
+  }
+
+  function _getFlag(uint256 flag) internal view returns (bool) {
+    return (flags & (1 << flag)) != 0;
   }
 
   //ERC2981 ROYALTY
