@@ -82,13 +82,6 @@ struct PayoutConfig {
   address ownerAltPayout;
 }
 
-struct Options {
-  bool uriLocked;
-  bool maxSupplyLocked;
-  bool affiliateFeeLocked;
-  bool ownerAltPayoutLocked;
-}
-
 struct AdvancedInvite {
   uint128 price; // in erc20
   uint128 reservePrice; // in erc20
@@ -120,6 +113,7 @@ struct ValidationArgs {
   uint256 quantity;
   uint256 curSupply;
   uint256 listSupply;
+  uint256 pairedSupply;
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
@@ -247,10 +241,10 @@ library ArchetypeLogicBurgers404 {
     }
 
     if (i.maxSupply < config.maxSupply) {
-      uint256 totalAfterMint = args.listSupply + args.quantity;
-      if (totalAfterMint > i.maxSupply) {
-        revert ListMaxSupplyExceeded();
-      }
+      uint256 totalAfterMint = args.listSupply + args.pairedSupply + args.quantity;
+        if (totalAfterMint > i.maxSupply) {
+            revert ListMaxSupplyExceeded();
+        }
     }
 
     if (args.quantity > config.maxBatchSize) {
