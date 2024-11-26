@@ -490,7 +490,7 @@ contract ArchetypeBurgers404 is DN420, Initializable, OwnableUpgradeable, ERC298
 
   // method will pair the supplies of two invite lists
   function setPairedInvite(bytes32 key1, bytes32 key2) external _onlyOwner {
-    if(invites[key1].maxSupply != invites[key1].maxSupply) {
+    if(invites[key1].maxSupply != invites[key2].maxSupply) {
       revert InvalidConfig();
     }
     pairedListKeys[key1] = bytes32(uint256(key2) + 1);
