@@ -25,7 +25,7 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
-      zksync: false, //true,
+      zksync: true, //true,
     },
     sepolia: {
       accounts: [privateKey],
