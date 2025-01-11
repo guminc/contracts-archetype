@@ -133,7 +133,8 @@ struct MintInfo {
   uint256 blockNumber;
 }
 
-address constant PLATFORM = 0x86B82972282Dd22348374bC63fd21620F7ED847B;
+// UPDATE CONSTANTS BEFORE DEPLOY
+address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
 address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
 address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
