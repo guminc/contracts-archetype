@@ -6,7 +6,7 @@ async function replaceConstants(filePath) {
 
   // Replace mainnet constants with test values
   data = data.replace(
-    "0x86B82972282Dd22348374bC63fd21620F7ED847B",
+    "0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98",
     "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
   );
   data = data.replace(
