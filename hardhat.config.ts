@@ -82,6 +82,16 @@ const config: HardhatUserConfig = {
       url: "https://polygon-rpc.com",
       chainId: 137,
     },
+    apechain_mainnet: {
+      accounts: [privateKey],
+      url: "https://rpc.apechain.com",
+      chainId: 33139,
+    },
+    soneium_mainnet: {
+      accounts: [privateKey],
+      url: "https://soneium.rpc.scs.startale.com?apikey=orREnyi7m4OGukzUGgFnOXGvzsEzIzct",
+      chainId: 1868,
+    },
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
@@ -99,15 +109,15 @@ const config: HardhatUserConfig = {
       // https://docs.zksync.io/build/tooling/hardhat/hardhat-zksync-solc#configuration
       libraries: {
         "contracts/ERC721a/ArchetypeLogicErc721a.sol": {
-          ArchetypeLogicErc721a: "0x0000000000000000000000000000000000000000", // update
+          ArchetypeLogicErc721a: "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
         },
         "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol": {
           ArchetypeLogicErc1155Random:
-            "0x0000000000000000000000000000000000000000", // update
+            "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
         },
         "contracts/BURGERS404/ArchetypeLogicBurgers404.sol": {
           ArchetypeLogicBurgers404:
-            "0x0000000000000000000000000000000000000000", // update
+            "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
         },
       },
     },
@@ -122,7 +132,7 @@ const config: HardhatUserConfig = {
     },
   },
   sourcify: {
-    enabled: true,
+    enabled: false,
   },
   etherscan: {
     apiKey: {
@@ -135,6 +145,8 @@ const config: HardhatUserConfig = {
       sanko_mainnet: "abc",
       berachain_bartio: "abc",
       soneium_minato: "abc",
+      apechain_mainnet: "533JYG2IWFR2YA8RS7WR5NA9W8I79XATPU",
+      soneium_mainnet: "abc"
     },
     customChains: [
       {
@@ -184,6 +196,24 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.polygonscan.com/api",
           browserURL: "https://polygonscan.com",
+        },
+      },
+      {
+        network: "apechain_mainnet",
+        chainId: 33139,
+        urls: {
+          apiURL: "https://api.apescan.io/api",
+          browserURL: "https://apescan.io/",
+        },
+      },
+      {
+        network: "soneium_mainnet",
+        chainId: 1868,
+        urls: {
+          // https://soneium.blockscout.com/
+          // superbridge.app/soneium
+          apiURL: "https://xckc3jvrzboyo8w4.blockscout.com/api",
+          browserURL: "https://xckc3jvrzboyo8w4.blockscout.com",
         },
       },
     ],
