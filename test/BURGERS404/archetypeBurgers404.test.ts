@@ -2935,7 +2935,7 @@ describe("Factory", function () {
     await archetypePayouts
       .connect(owner)
       .approveWithdrawal(ownerAlt.address, true);
-    archetypePayouts
+    await archetypePayouts
       .connect(ownerAlt)
       .withdrawFrom(owner.address, ownerAlt.address);
     await expect(
