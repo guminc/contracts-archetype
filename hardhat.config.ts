@@ -100,29 +100,29 @@ const config: HardhatUserConfig = {
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
-      verifyURL:
-        "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
+      // verifyURL:
+      //   "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
       chainId: 11124,
       ethNetwork: "sepolia",
       zksync: true,
     },
   },
   zksolc: {
-    version: "latest",
+    version: "1.5.7",
     settings: {
       // find all available options in the official documentation
       // https://docs.zksync.io/build/tooling/hardhat/hardhat-zksync-solc#configuration
       libraries: {
         "contracts/ERC721a/ArchetypeLogicErc721a.sol": {
-          ArchetypeLogicErc721a: "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
+          ArchetypeLogicErc721a: "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe",
         },
         "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol": {
           ArchetypeLogicErc1155Random:
-            "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
+            "0x0000000000000000000000000000000000000000", // update
         },
         "contracts/BURGERS404/ArchetypeLogicBurgers404.sol": {
           ArchetypeLogicBurgers404:
-            "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
+            "0x0000000000000000000000000000000000000000", // update
         },
       },
     },
@@ -147,6 +147,7 @@ const config: HardhatUserConfig = {
       blast_mainnet: process.env.BLASTSCAN_API_KEY || "",
       arbitrum_mainnet: process.env.ARBSCAN_API_KEY || "",
       polygon_mainnet: process.env.POLYSCAN_API_KEY || "",
+      abstract_testnet: process.env.ABSSCAN_API_KEY || "",
       sanko_mainnet: "abc",
       berachain_bartio: "abc",
       soneium_minato: "abc",
@@ -223,13 +224,20 @@ const config: HardhatUserConfig = {
           browserURL: "https://xckc3jvrzboyo8w4.blockscout.com",
         },
       },
-      ,
       {
         network: "superposition",
         chainId: 55244,
         urls: {
           apiURL: "https://explorer.superposition.so/api",
           browserURL: "https://explorer.superposition.so",
+        }
+      },
+      {
+        network: "abstract_testnet",
+        chainId: 11124,
+        urls: {
+          apiURL: "https://api-sepolia.abscan.org/api",
+          browserURL: "https://sepolia.abscan.org/",
         },
       },
     ],
