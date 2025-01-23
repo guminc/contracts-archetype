@@ -6,9 +6,9 @@ async function main() {
   const ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
   const archetypeBatch = await ArchetypeBatch.deploy();
 
-  await archetypeBatch.deployed();
+  const archetypeBatchAddress = await archetypeBatch.getAddress();
 
-  console.log("Archetype Batch deployed to:", archetypeBatch.address);
+  console.log("Archetype Batch deployed to:", archetypeBatchAddress);
 
   // const ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
   // const archetypeBatch = ArchetypeBatch.attach("0xE9241C8114534c5C475e6eFbA31e60F200945856");

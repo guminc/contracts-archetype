@@ -92,6 +92,11 @@ const config: HardhatUserConfig = {
       url: "https://soneium.rpc.scs.startale.com?apikey=orREnyi7m4OGukzUGgFnOXGvzsEzIzct",
       chainId: 1868,
     },
+    superposition: {
+      accounts: [privateKey],
+      url: "https://rpc.superposition.so",
+      chainId: 55244,
+    },
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
@@ -146,7 +151,9 @@ const config: HardhatUserConfig = {
       berachain_bartio: "abc",
       soneium_minato: "abc",
       apechain_mainnet: "533JYG2IWFR2YA8RS7WR5NA9W8I79XATPU",
-      soneium_mainnet: "abc"
+      soneium_mainnet: "abc",
+      superposition: "abc"
+
     },
     customChains: [
       {
@@ -214,6 +221,15 @@ const config: HardhatUserConfig = {
           // superbridge.app/soneium
           apiURL: "https://xckc3jvrzboyo8w4.blockscout.com/api",
           browserURL: "https://xckc3jvrzboyo8w4.blockscout.com",
+        },
+      },
+      ,
+      {
+        network: "superposition",
+        chainId: 55244,
+        urls: {
+          apiURL: "https://explorer.superposition.so/api",
+          browserURL: "https://explorer.superposition.so",
         },
       },
     ],
