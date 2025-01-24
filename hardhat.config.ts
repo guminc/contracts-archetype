@@ -6,6 +6,7 @@ import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@matterlabs/hardhat-zksync";
 import "@matterlabs/hardhat-zksync-deploy";
+import "@matterlabs/hardhat-zksync-node";
 import "hardhat-gas-reporter";
 require("hardhat-contract-sizer");
 
@@ -100,8 +101,8 @@ const config: HardhatUserConfig = {
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
-      // verifyURL:
-      //   "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
+      verifyURL:
+        "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
       chainId: 11124,
       ethNetwork: "sepolia",
       zksync: true,
@@ -112,20 +113,7 @@ const config: HardhatUserConfig = {
     settings: {
       // find all available options in the official documentation
       // https://docs.zksync.io/build/tooling/hardhat/hardhat-zksync-solc#configuration
-      libraries: {
-        "contracts/ERC721a/ArchetypeLogicErc721a.sol": {
-          ArchetypeLogicErc721a: "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe",
-        },
-        "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol": {
-          ArchetypeLogicErc1155Random:
-            "0x0000000000000000000000000000000000000000", // update
-        },
-        "contracts/BURGERS404/ArchetypeLogicBurgers404.sol": {
-          ArchetypeLogicBurgers404:
-            "0x0000000000000000000000000000000000000000", // update
-        },
-      },
-    },
+    }
   },
   solidity: {
     version: "0.8.20",
