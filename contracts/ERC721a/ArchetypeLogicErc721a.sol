@@ -240,13 +240,13 @@ abstract contract ArchetypeLogicErc721a {
       }
     }
 
-    // if (block.timestamp < i.start) {
-    //   revert MintNotYetStarted();
-    // }
+    if (block.timestamp < i.start) {
+      revert MintNotYetStarted();
+    }
 
-    // if (i.end > i.start && block.timestamp > i.end) {
-    //   revert MintEnded();
-    // }
+    if (i.end > i.start && block.timestamp > i.end) {
+      revert MintEnded();
+    }
 
     if (i.limit < i.maxSupply) {
       uint256 totalAfterMint = minted[msgSender][auth.key] + args.quantity;
