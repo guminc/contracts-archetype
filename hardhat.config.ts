@@ -109,9 +109,9 @@ const config: HardhatUserConfig = {
     },
     abstract_mainnet: {
       accounts: [privateKey],
-      url: "https://api.abs.xyz",
+      url: "https://api.mainnet.abs.xyz/",
       verifyURL:
-        "https://api-verify.abs.xyz/contract_verification",
+        "https://api-explorer-verify.mainnet.abs.xyz/contract_verification",
       chainId: 2741,
       ethNetwork: "mainnet",
       zksync: true,
