@@ -16,6 +16,7 @@
 pragma solidity ^0.8.20;
 
 import "../ArchetypePayouts.sol";
+import "../IExclusiveDelegateResolver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "solady/src/utils/MerkleProofLib.sol";
@@ -148,6 +149,11 @@ abstract contract ArchetypeLogicErc721a {
   event Referral(address indexed affiliate, address token, uint128 wad, uint256 numMints);
   event Withdrawal(address indexed src, address token, uint128 wad);
 
+  // AGW
+  bytes24 constant _AGW_LINK_RIGHTS = bytes24(keccak256("AGW_LINK"));
+  IExclusiveDelegateResolver constant DELEGATE_RESOLVER =
+    IExclusiveDelegateResolver(0x0000000078CC4Cc1C14E27c0fa35ED6E5E58825D);
+
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
     AdvancedInvite storage invite,
@@ -217,6 +223,7 @@ abstract contract ArchetypeLogicErc721a {
     uint128 cost
   ) internal view {
     address msgSender = _msgSender();
+    address effectiveEoa = getEffectiveEoaWallet(msgSender);
     if (args.affiliate != address(0)) {
       if (
         args.affiliate == PLATFORM || args.affiliate == args.owner || args.affiliate == msgSender
@@ -231,11 +238,11 @@ abstract contract ArchetypeLogicErc721a {
     }
 
     if (!i.isBlacklist) {
-      if (!verify(auth, i.tokenAddress, msgSender)) {
+      if (!verify(auth, i.tokenAddress, effectiveEoa)) {
         revert WalletUnauthorizedToMint();
       }
     } else {
-      if (verify(auth, i.tokenAddress, msgSender)) {
+      if (verify(auth, i.tokenAddress, effectiveEoa)) {
         revert Blacklisted();
       }
     }
@@ -249,7 +256,7 @@ abstract contract ArchetypeLogicErc721a {
     }
 
     if (i.limit < i.maxSupply) {
-      uint256 totalAfterMint = minted[msgSender][auth.key] + args.quantity;
+      uint256 totalAfterMint = minted[effectiveEoa][auth.key] + args.quantity;
 
       if (totalAfterMint > i.limit) {
         revert NumberOfMintsExceeded();
@@ -314,8 +321,9 @@ abstract contract ArchetypeLogicErc721a {
 
     // check if msgSender owns tokens and has correct approvals
     address msgSender = _msgSender();
+    address effectiveEoa = getEffectiveEoaWallet(msgSender);
     for (uint256 i; i < tokenIds.length; ) {
-      if (burnInvite.burnErc721.ownerOf(tokenIds[i]) != msgSender) {
+      if (burnInvite.burnErc721.ownerOf(tokenIds[i]) != effectiveEoa) {
         revert NotTokenOwner();
       }
       unchecked {
@@ -346,7 +354,7 @@ abstract contract ArchetypeLogicErc721a {
     }
 
     if (burnInvite.limit < config.maxSupply) {
-      uint256 totalAfterMint = minted[msgSender][keccak256(abi.encodePacked("burn", auth.key))] +
+      uint256 totalAfterMint = minted[effectiveEoa][keccak256(abi.encodePacked("burn", auth.key))] +
         quantity;
 
       if (totalAfterMint > burnInvite.limit) {
@@ -546,6 +554,20 @@ abstract contract ArchetypeLogicErc721a {
     if (signer != affiliateSigner) {
       revert InvalidSignature();
     }
+  }
+
+  function getEffectiveEoaWallet(address msgSender) public view returns (address) {
+      try DELEGATE_RESOLVER.delegatedWalletsByRights(msgSender, _AGW_LINK_RIGHTS) returns (address[] memory agwDelegates) {
+          // Use first delegated wallet if set
+          if(agwDelegates.length > 0) {
+              return agwDelegates[0];
+          }
+      } catch {
+          // If delegation check fails, silently fall back to msgSender
+      }
+      
+      // Return msgSender if delegation fails or no delegates found
+      return msgSender;
   }
 
   function verify(

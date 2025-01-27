@@ -189,8 +189,10 @@ contract ArchetypeErc721a is
 
     validateMint(invite, config, auth, _minted, signature, args, cost);
 
+    address msgSender = _msgSender();
+    address effectiveEoa = getEffectiveEoaWallet(msgSender);
     if (invite.limit < invite.maxSupply) {
-      _minted[_msgSender()][auth.key] += totalQuantity;
+      _minted[effectiveEoa][auth.key] += totalQuantity;
     }
     if (invite.maxSupply < UINT32_MAX) {
       _listSupply[auth.key] += totalQuantity;
@@ -207,7 +209,7 @@ contract ArchetypeErc721a is
     );
 
     if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
+      _refund(msgSender, msg.value - cost);
     }
   }
 
@@ -234,8 +236,9 @@ contract ArchetypeErc721a is
       : tokenIds.length / burnInvite.ratio;
     _mint(msgSender, quantity);
 
+    address effectiveEoa = getEffectiveEoaWallet(msgSender);
     if (burnInvite.limit < config.maxSupply) {
-      _minted[msgSender][keccak256(abi.encodePacked("burn", auth.key))] += quantity;
+      _minted[effectiveEoa][keccak256(abi.encodePacked("burn", auth.key))] += quantity;
     }
 
     updateBalances(
@@ -249,7 +252,7 @@ contract ArchetypeErc721a is
     );
 
     if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
+      _refund(msgSender, msg.value - cost);
     }
   }
 
@@ -299,7 +302,8 @@ contract ArchetypeErc721a is
   }
 
   function minted(address minter, bytes32 key) external view returns (uint256) {
-    return _minted[minter][key];
+    address effectiveEoa = getEffectiveEoaWallet(minter);
+    return _minted[effectiveEoa][key];
   }
 
   function listSupply(bytes32 key) external view returns (uint256) {
