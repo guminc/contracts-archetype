@@ -101,7 +101,7 @@ const config: HardhatUserConfig = {
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
-      verifyURL:
+      verifyURL: 
         "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
       chainId: 11124,
       ethNetwork: "sepolia",
@@ -110,8 +110,10 @@ const config: HardhatUserConfig = {
     abstract_mainnet: {
       accounts: [privateKey],
       url: "https://api.mainnet.abs.xyz/",
-      verifyURL:
-        "https://api-explorer-verify.mainnet.abs.xyz/contract_verification",
+      // verifyURL: "https://api.abscan.org/api",
+
+      // verifyURL:
+      //   "https://api-explorer-verify.mainnet.abs.xyz/contract_verification",
       chainId: 2741,
       ethNetwork: "mainnet",
       zksync: true,
@@ -144,7 +146,7 @@ const config: HardhatUserConfig = {
       blast_mainnet: process.env.BLASTSCAN_API_KEY || "",
       arbitrum_mainnet: process.env.ARBSCAN_API_KEY || "",
       polygon_mainnet: process.env.POLYSCAN_API_KEY || "",
-      abstract_testnet: process.env.ABSSCAN_API_KEY || "",
+      abstract_mainnet: process.env.ABSSCAN_API_KEY || "",
       sanko_mainnet: "abc",
       berachain_bartio: "abc",
       soneium_minato: "abc",
