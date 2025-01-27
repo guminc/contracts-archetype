@@ -107,6 +107,15 @@ const config: HardhatUserConfig = {
       ethNetwork: "sepolia",
       zksync: true,
     },
+    abstract_mainnet: {
+      accounts: [privateKey],
+      url: "https://api.abs.xyz",
+      verifyURL:
+        "https://api-verify.abs.xyz/contract_verification",
+      chainId: 2741,
+      ethNetwork: "mainnet",
+      zksync: true,
+    },
   },
   zksolc: {
     version: "1.5.7",
