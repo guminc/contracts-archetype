@@ -2356,7 +2356,7 @@ describe("FactoryZksyncErc721a", function () {
         .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
           value: 0,
         })
-    ).to.be.revertedWithCustomError(archetypeLogic, "NumberOfMintsExceeded");
+    ).to.be.revertedWithCustomError(archetype, "NumberOfMintsExceeded");
 
     // mint 2 get 24
     await nftMint
@@ -2396,14 +2396,19 @@ describe("FactoryZksyncErc721a", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    const newCollectionAddressMint = getCollectionAddress(resultMint.logs)
     const nftMint = ArchetypeErc721a.attach(newCollectionAddressMint);
+
+    const archetypeAddress = await archetypePayouts.getAddress()
+    const archetetypeBatch = await archetypeBatch.getAddress();
+    console.log("constants", accountTwo.address, archetypeAddress, archetetypeBatch)
+    await nftMint.setConstants(accountTwo.address, archetetypeBatch, archetypeAddress);
 
     await nftMint
       .connect(owner)
       .setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: 0,
-        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+        start: 0,//ethers.toBigInt(Math.floor(Date.now() / 1000)),
         end: 0,
         limit: 100,
         maxSupply: 100,
@@ -2414,7 +2419,7 @@ describe("FactoryZksyncErc721a", function () {
 
     await nftMint.connect(owner).setInvite(HASHONE, ipfsh.ctod(CID_ZERO), {
       price: ethers.parseEther("0.1"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      start: 0,//ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 100,
       maxSupply: 100,
@@ -2422,6 +2427,7 @@ describe("FactoryZksyncErc721a", function () {
       tokenAddress: ZERO,
       isBlacklist: false,
     });
+
 
     const nftMintAddress = await nftMint.getAddress();
     const targets = [
@@ -2527,9 +2533,15 @@ describe("FactoryZksyncErc721a", function () {
       DEFAULT_PAYOUT_CONFIG
     );
     const resultMint = await newCollectionMint.wait();
-    const newCollectionAddressMint = resultMint.logs[0].address || "";
+    
+    const newCollectionAddressMint = getCollectionAddress(resultMint.logs)
     const nftMint = ArchetypeErc721a.attach(newCollectionAddressMint);
     const nftMintAddress = await nftMint.getAddress();
+
+    const archetypeAddress = await archetypePayouts.getAddress()
+    const archetetypeBatch = await archetypeBatch.getAddress();
+    console.log("constants", accountTwo.address, archetypeAddress, archetetypeBatch)
+    await nftMint.setConstants(accountTwo.address, archetetypeBatch, archetypeAddress);
 
     const addresses = [minter.address];
     const invitelist = new Invitelist(addresses);
