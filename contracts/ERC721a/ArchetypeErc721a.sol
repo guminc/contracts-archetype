@@ -94,6 +94,17 @@ contract ArchetypeErc721a is
     mintTo(auth, quantity, _msgSender(), affiliate, signature);
   }
 
+  // test only
+  function setConstants(
+    address platform,
+    address batch,
+    address payouts
+  ) external {
+    PLATFORM = platform;
+    BATCH = batch;
+    PAYOUTS = payouts;
+  }
+
   function batchMintTo(
     Auth calldata auth,
     address[] calldata toList,
@@ -306,7 +317,7 @@ contract ArchetypeErc721a is
     return _listSupply[key];
   }
 
-  function platform() external pure returns (address) {
+  function platform() external view returns (address) {
     return PLATFORM;
   }
 

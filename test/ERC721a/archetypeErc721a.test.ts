@@ -115,6 +115,7 @@ describe("FactoryZksyncErc721a", function () {
       await archetypePayouts.connect(owner).withdraw();
     if ((await archetypePayouts.balance(platform.address)) > ethers.toBigInt(0))
       await archetypePayouts.connect(platform).withdraw();
+
   });
 
   it("should have platform set to test account", async function () {
@@ -371,7 +372,7 @@ describe("FactoryZksyncErc721a", function () {
     });
     await nft.connect(owner).setInvite(root, ipfsh.ctod(CID_DEFAULT), {
       price: price,
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      start: 0,//ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 10,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -390,7 +391,7 @@ describe("FactoryZksyncErc721a", function () {
       nft.mint({ key: root, proof: proof }, 1, ZERO, "0x", {
         value: ethers.parseEther("0.07"),
       })
-    ).to.be.revertedWithCustomError(archetypeLogic, "InsufficientEthSent");
+    ).to.be.revertedWithCustomError(archetype, "InsufficientEthSent");
 
     await nft.mint({ key: root, proof: proof }, 1, ZERO, "0x", {
       value: price,
@@ -415,7 +416,7 @@ describe("FactoryZksyncErc721a", function () {
         .mint({ key: root, proof: proofTwo }, 2, ZERO, "0x", {
           value: price * BigInt(2),
         })
-    ).to.be.revertedWithCustomError(archetypeLogic, "WalletUnauthorizedToMint");
+    ).to.be.revertedWithCustomError(archetype, "WalletUnauthorizedToMint");
 
     // public mint rejection
     await expect(
@@ -424,7 +425,7 @@ describe("FactoryZksyncErc721a", function () {
         .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
           value: price * BigInt(2),
         })
-    ).to.be.revertedWithCustomError(archetypeLogic, "MintNotYetStarted");
+    ).to.be.revertedWithCustomError(archetype, "MintNotYetStarted");
 
     const blockTimestamp = (await ethers.provider.getBlock("latest")).timestamp;
     await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
@@ -447,7 +448,7 @@ describe("FactoryZksyncErc721a", function () {
         .mint({ key: ethers.ZeroHash, proof: [] }, 2, ZERO, "0x", {
           value: ethers.parseEther("0.1") * BigInt(2),
         })
-    ).to.be.revertedWithCustomError(archetypeLogic, "MintEnded");
+    ).to.be.revertedWithCustomError(archetype, "MintEnded");
 
     expect(await nft.balanceOf(accountTwo.address)).to.equal(0);
   });
@@ -510,9 +511,14 @@ describe("FactoryZksyncErc721a", function () {
 
     const nft = ArchetypeErc721a.attach(newCollectionAddress);
 
+    const archetypeAddress = await archetypePayouts.getAddress()
+    const archetetypeBatch = await archetypeBatch.getAddress();
+    console.log("constants", platform.address, archetypeAddress, archetetypeBatch)
+    await nft.setConstants(platform.address, archetetypeBatch, archetypeAddress);
+
     await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
       price: ethers.parseEther("0.08"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      start: 0,//ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 300,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -542,7 +548,7 @@ describe("FactoryZksyncErc721a", function () {
             value: ethers.parseEther("0.08"),
           }
         )
-    ).to.be.reverted;//WithCustomError(archetypeLogic, "InvalidSignature()");
+    ).to.be.revertedWithCustomError(archetype, "InvalidSignature()");
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(
@@ -643,31 +649,31 @@ describe("FactoryZksyncErc721a", function () {
     balance = await ethers.provider.getBalance(affiliate.address);
     await expect(
       nft.connect(affiliate).withdraw()
-    ).to.be.revertedWithCustomError(archetypeLogic, "NotShareholder");
+    ).to.be.revertedWithCustomError(archetype, "NotShareholder");
     await nft.connect(affiliate).withdrawAffiliate();
     diff = (await ethers.provider.getBalance(affiliate.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.020")));
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.024")));
 
     // withdraw empty owner balance
-    await expect(nft.connect(owner).withdraw()).to.be.rejectedWith(
+    await expect(nft.connect(owner).withdraw()).to.be.revertedWithCustomError(archetype,
       "BalanceEmpty"
     );
 
     // withdraw empty owner balance
     await expect(
       archetypePayouts.connect(owner).withdraw()
-    ).to.be.revertedWithCustomError(archetypeLogic, "BalanceEmpty");
+    ).to.be.revertedWithCustomError(archetype, "BalanceEmpty");
 
     // withdraw empty affiliate balance
     await expect(
       nft.connect(affiliate).withdrawAffiliate()
-    ).to.be.revertedWithCustomError(archetypeLogic, "BalanceEmpty");
+    ).to.be.revertedWithCustomError(archetype, "BalanceEmpty");
 
     // withdraw unused affiliate balance
     await expect(
       nft.connect(accountThree).withdrawAffiliate()
-    ).to.be.revertedWithCustomError(archetypeLogic, "BalanceEmpty");
+    ).to.be.revertedWithCustomError(archetype, "BalanceEmpty");
   });
 
   it("should set correct discounts - mint tiers and affiliate", async function () {
@@ -2795,7 +2801,7 @@ describe("FactoryZksyncErc721a", function () {
 
     await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
       price: ethers.parseEther("0.08"),
-      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      start: 0,//ethers.toBigInt(Math.floor(Date.now() / 1000)),
       end: 0,
       limit: 300,
       maxSupply: DEFAULT_CONFIG.maxSupply,
@@ -2803,6 +2809,12 @@ describe("FactoryZksyncErc721a", function () {
       tokenAddress: ZERO,
       isBlacklist: false,
     });
+
+    const archetypeAddress = await archetypePayouts.getAddress()
+    const archetetypeBatch = await archetypeBatch.getAddress();
+    console.log("constants", platform.address, archetypeAddress, archetetypeBatch)
+    await nft.setConstants(platform.address, archetetypeBatch, archetypeAddress);
+
 
     // valid signature (from affiliateSigner)
     const referral = await AFFILIATE_SIGNER.signMessage(

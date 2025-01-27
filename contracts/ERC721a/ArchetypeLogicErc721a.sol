@@ -133,9 +133,9 @@ struct ValidationArgs {
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
-address constant PLATFORM = 0xF3Db2ea2b0D22265Aa4717a71F75f48106EFc588;
-address constant BATCH = 0x467177879f29A253680f037F3D30c94F7C6F1ED4;
-address constant PAYOUTS = 0x13eBc2af5078e394975e809cf6d33c9B99D3D7cF;
+// address PLATFORM;// = 0xF3Db2ea2b0D22265Aa4717a71F75f48106EFc588;
+// address BATCH;// = 0x467177879f29A253680f037F3D30c94F7C6F1ED4;
+// address PAYOUTS;// = 0x13eBc2af5078e394975e809cf6d33c9B99D3D7cF;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 
@@ -147,6 +147,10 @@ abstract contract ArchetypeLogicErc721a {
   event BurnInvited(bytes32 indexed key, bytes32 indexed cid);
   event Referral(address indexed affiliate, address token, uint128 wad, uint256 numMints);
   event Withdrawal(address indexed src, address token, uint128 wad);
+
+  address PLATFORM;// = 0xF3Db2ea2b0D22265Aa4717a71F75f48106EFc588;
+  address BATCH;// = 0x467177879f29A253680f037F3D30c94F7C6F1ED4;
+  address PAYOUTS;// = 0x13eBc2af5078e394975e809cf6d33c9B99D3D7cF;
 
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
