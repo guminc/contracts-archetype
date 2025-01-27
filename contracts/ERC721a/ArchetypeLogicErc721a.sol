@@ -321,9 +321,8 @@ abstract contract ArchetypeLogicErc721a {
 
     // check if msgSender owns tokens and has correct approvals
     address msgSender = _msgSender();
-    address effectiveEoa = getEffectiveEoaWallet(msgSender);
     for (uint256 i; i < tokenIds.length; ) {
-      if (burnInvite.burnErc721.ownerOf(tokenIds[i]) != effectiveEoa) {
+      if (burnInvite.burnErc721.ownerOf(tokenIds[i]) != msgSender) {
         revert NotTokenOwner();
       }
       unchecked {
@@ -353,6 +352,7 @@ abstract contract ArchetypeLogicErc721a {
       revert MaxBatchSizeExceeded();
     }
 
+    address effectiveEoa = getEffectiveEoaWallet(msgSender);
     if (burnInvite.limit < config.maxSupply) {
       uint256 totalAfterMint = minted[effectiveEoa][keccak256(abi.encodePacked("burn", auth.key))] +
         quantity;
