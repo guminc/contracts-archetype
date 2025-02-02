@@ -97,6 +97,11 @@ const config: HardhatUserConfig = {
       url: "https://rpc.superposition.so",
       chainId: 55244,
     },
+    ink_mainnet: {
+      accounts: [privateKey],
+      url: "https://rpc-gel.inkonchain.com",
+      chainId: 57073,
+    },
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
@@ -152,7 +157,8 @@ const config: HardhatUserConfig = {
       soneium_minato: "abc",
       apechain_mainnet: "533JYG2IWFR2YA8RS7WR5NA9W8I79XATPU",
       soneium_mainnet: "abc",
-      superposition: "abc"
+      superposition: "abc",
+      ink_mainnet: "abc"
 
     },
     customChains: [
@@ -223,13 +229,20 @@ const config: HardhatUserConfig = {
           browserURL: "https://xckc3jvrzboyo8w4.blockscout.com",
         },
       },
-      ,
       {
         network: "superposition",
         chainId: 55244,
         urls: {
           apiURL: "https://explorer.superposition.so/api",
           browserURL: "https://explorer.superposition.so",
+        },
+      },
+      {
+        network: "ink_mainnet",
+        chainId: 57073,
+        urls: {
+          apiURL: "https://explorer.inkonchain.com/api",
+          browserURL: "https://explorer.inkonchain.com",
         },
       },
     ],
