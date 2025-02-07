@@ -8,76 +8,76 @@ function asContractType<T extends BaseContract>(contract: any): T {
 }
 
 async function main() {
-  const Factory = await ethers.getContractFactory("FactoryErc721a");
+  // const Factory = await ethers.getContractFactory("FactoryZksyncErc721a");
 
-  const factory = asContractType<FactoryErc721a>(
-    Factory.attach("0x0855c3f7d53f906DDB1236E9044Dc559C7424D92")
-  );
-  const factoryAddress = await factory.getAddress();
-
-  console.log("Contract Factory is:", factoryAddress);
-
-  const [accountZero] = await ethers.getSigners();
-
-  const newContract = await factory.createCollection(
-    accountZero.address,
-    "test payout",
-    "PAYOUT",
-    {
-      baseUri:
-        "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
-      affiliateSigner: "0x1f285dD528cf4cDE3081C6d48D9df7A4F8FA9383",
-      maxSupply: 5000,
-      maxBatchSize: 20,
-      affiliateFee: 1500,
-      affiliateDiscount: 0,
-      defaultRoyalty: 500,
-    },
-    {
-      ownerBps: 9500,
-      platformBps: 250,
-      partnerBps: 250,
-      superAffiliateBps: 0,
-      partner: "0xC80A1105CA41506A758F19489FDCBAfF8ad84ed1",
-      superAffiliate: "0x0000000000000000000000000000000000000000",
-      ownerAltPayout: "0x0000000000000000000000000000000000000000",
-    }
-  );
-
-  console.log({ newContract });
-
-  const result = await newContract.wait();
-
-  console.log({ result });
-
-  const newCollectionAddress = result.logs[0].address || "";
-  console.log({ newCollectionAddress });
-
-  // const ArchetypeLogic = await ethers.getContractFactory(
-  //   "ArchetypeLogicErc721a"
+  // const factory = asContractType<FactoryErc721a>(
+  //   Factory.attach("0xEF9B8d42CDfeb3F8F8f7CDa3BCb8ce78B60F51b2")
   // );
-  // const archetypeLogic = await ArchetypeLogic.attach(
-  //   "0xBF09cF88E8Ac620e6487097Be0E4e907eDd6f789"
-  // );
-  // const Archetype = await ethers.getContractFactory("ArchetypeErc721a", {
-  //   libraries: {
-  //     ArchetypeLogicErc721a: await archetypeLogic.getAddress(),
+  // const factoryAddress = await factory.getAddress();
+
+  // console.log("Contract Factory is:", factoryAddress);
+
+  // const [accountZero] = await ethers.getSigners();
+
+  // const newContract = await factory.createCollection(
+  //   accountZero.address,
+  //   "test main",
+  //   "TESTM",
+  //   {
+  //     baseUri:
+  //       "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
+  //     affiliateSigner: "0x1f285dD528cf4cDE3081C6d48D9df7A4F8FA9383",
+  //     maxSupply: 5000,
+  //     maxBatchSize: 20,
+  //     affiliateFee: 1500,
+  //     affiliateDiscount: 0,
+  //     defaultRoyalty: 500,
   //   },
-  // });
-  // const archetype = asContractType<ArchetypeErc721a>(
-  //   Archetype.attach(newCollectionAddress)
+  //   {
+  //     ownerBps: 9500,
+  //     platformBps: 250,
+  //     partnerBps: 250,
+  //     superAffiliateBps: 0,
+  //     partner: "0xC80A1105CA41506A758F19489FDCBAfF8ad84ed1",
+  //     superAffiliate: "0x0000000000000000000000000000000000000000",
+  //     ownerAltPayout: "0x0000000000000000000000000000000000000000",
+  //   }
   // );
 
-  // await archetype.setInvite(ethers.ZeroHash, ethers.ZeroHash, {
-  //   price: ethers.parseEther("0.001"),
-  //   start: 0,
-  //   end: 0,
-  //   limit: 2 ** 32 - 1,
-  //   maxSupply: 2 ** 32 - 1,
-  //   unitSize: 1,
-  //   tokenAddress: ethers.ZeroAddress,
-  //   isBlacklist: false,
-  // });
+  // console.log({ newContract });
+
+  // const result = await newContract.wait();
+
+  // console.log({ result });
+
+  // const newCollectionAddress = result.logs[0].address || "";
+  // console.log({ newCollectionAddress });
+
+  const ArchetypeLogic = await ethers.getContractFactory(
+    "ArchetypeLogicErc721a"
+  );
+  const archetypeLogic = await ArchetypeLogic.attach(
+    "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe"
+  );
+  const Archetype = await ethers.getContractFactory("ArchetypeErc721a", {
+    libraries: {
+      ArchetypeLogicErc721a: await archetypeLogic.getAddress(),
+    },
+  });
+  const archetype = asContractType<ArchetypeErc721a>(
+    Archetype.attach("0x5D8c98818D97fe34F7C152465BF3571f8d3229c1")
+  );
+
+  await archetype.setInvite(ethers.ZeroHash, ethers.ZeroHash, {
+    price: ethers.parseEther("0.001"),
+    start: 0,
+    end: 0,
+    limit: 2 ** 32 - 1,
+    maxSupply: 2 ** 32 - 1,
+    unitSize: 1,
+    tokenAddress: ethers.ZeroAddress,
+    isBlacklist: false,
+  });
 
   // await archetype.mint(
   //   { key: ethers.ZeroHash, proof: [] },
