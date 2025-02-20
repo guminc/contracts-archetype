@@ -1,17 +1,32 @@
 [
-  {
-    "contractName": "ArchetypeLogicBurgers404",
-    "contractPath": "contracts/BURGERS404/ArchetypeLogicBurgers404.sol",
-    "missingLibraries": []
-  },
-  {
-    "contractName": "ArchetypeLogicErc1155Random",
-    "contractPath": "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol",
-    "missingLibraries": []
-  },
-  {
-    "contractName": "ArchetypeLogicErc721a",
-    "contractPath": "contracts/ERC721a/ArchetypeLogicErc721a.sol",
-    "missingLibraries": []
-  }
+    {
+        "contractName": "ArchetypeLogicBurgers404",
+        "contractPath": "contracts/BURGERS404/ArchetypeLogicBurgers404.sol",
+        "missingLibraries": []
+    },
+    {
+        "contractName": "ArchetypeLogicErc1155Random",
+        "contractPath": "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol",
+        "missingLibraries": []
+    },
+    {
+        "contractName": "ArchetypeLogicErc721a",
+        "contractPath": "contracts/ERC721a/ArchetypeLogicErc721a.sol",
+        "missingLibraries": []
+    },
+    {
+        "contractName": "ArchetypeLogicBurgers404",
+        "contractPath": "contracts/BURGERS404/ArchetypeLogicBurgers404.sol",
+        "missingLibraries": []
+    },
+    {
+        "contractName": "ArchetypeLogicErc1155Random",
+        "contractPath": "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol",
+        "missingLibraries": []
+    },
+    {
+        "contractName": "ArchetypeLogicErc721a",
+        "contractPath": "contracts/ERC721a/ArchetypeLogicErc721a.sol",
+        "missingLibraries": []
+    }
 ]
