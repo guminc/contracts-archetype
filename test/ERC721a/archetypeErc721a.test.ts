@@ -2932,6 +2932,97 @@ describe("FactoryErc721a", function () {
         .withdrawTokensFrom(owner.address, ownerAlt.address, [ZERO])
     ).to.be.revertedWithCustomError(archetypeLogic, "BalanceEmpty");
   });
+
+  it("test burn to mint with erc20 payment and self burn", async function () {
+    const [accountZero, accountOne] = await ethers.getSigners();
+
+    const owner = accountZero;
+    const minter = accountOne;
+
+    const newCollectionBurn = await factory.createCollection(
+      owner.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
+    );
+    const resultBurn = await newCollectionBurn.wait();
+    const newCollectionAddressBurn = resultBurn.logs[0].address || "";
+    const nftBurn = ArchetypeErc721a.attach(newCollectionAddressBurn);
+
+    const erc20 = asContractType<TestErc20>(
+      await (await ethers.getContractFactory("TestErc20")).deploy()
+    );
+    const tokenAddress = await erc20.getAddress();
+
+    // Set up initial mint invite
+    await nftBurn.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("1"),
+      start: 0,
+      end: 0,
+      limit: 100,
+      maxSupply: 100,
+      unitSize: 0,
+      tokenAddress: ZERO,
+      isBlacklist: false,
+    });
+
+    // Mint initial tokens that will be burned
+    await nftBurn.connect(minter).mint(
+      { key: ethers.ZeroHash, proof: [] },
+      4,
+      ZERO,
+      "0x",
+      { value: ethers.parseEther("4") }
+    );
+
+    // Set up burn invite with ERC20 payment
+    const burnInvite = {
+      price: ethers.parseEther("10"),
+      start: 0,
+      end: 0,
+      limit: 100,
+      ratio: 2,
+      reversed: false,
+      burnErc721: await nftBurn.getAddress(), // Same contract address
+      burnAddress: BURN,
+      tokenAddress: tokenAddress,
+    };
+    
+    await nftBurn.connect(owner).setBurnInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), burnInvite);
+
+    // Mint ERC20 tokens to minter
+    await erc20.connect(minter).mint(ethers.parseEther("20"));
+    await erc20.connect(minter).approve(await nftBurn.getAddress(), ethers.MaxUint256);
+    
+    // Verify initial state
+    expect(await nftBurn.balanceOf(minter.address)).to.equal(4);
+    expect(await erc20.balanceOf(minter.address)).to.equal(ethers.parseEther("20"));
+
+    // Approve nftBurn to transfer its own tokens
+    await nftBurn.connect(minter).setApprovalForAll(await nftBurn.getAddress(), true);
+
+    // Burn 2 tokens to mint 1 token, paying with ERC20
+    await nftBurn.connect(minter).burnToMint(
+      { key: ethers.ZeroHash, proof: [] },
+      [1, 2]
+    );
+
+    expect(await nftBurn.balanceOf(minter.address)).to.equal(3); // Lost 2, gained 1
+    expect(await erc20.balanceOf(minter.address)).to.equal(ethers.parseEther("10")); // Paid 10 tokens
+    expect(await erc20.balanceOf(await nftBurn.getAddress())).to.equal(ethers.parseEther("10"));
+    expect(await nftBurn.ownerOf(1)).to.equal(BURN);
+    expect(await nftBurn.ownerOf(2)).to.equal(BURN);
+    
+    // Verify that burned tokens can't be burned again
+    await expect(
+      nftBurn.connect(minter).burnToMint(
+        { key: ethers.ZeroHash, proof: [] },
+        [1, 2]
+      )
+    ).to.be.revertedWithCustomError(archetypeLogic, "NotTokenOwner");
+  });
+
 });
 
 // todo: add test to ensure affiliate signer can't be zero address
