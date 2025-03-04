@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-// Factory v0.4.0
+// Factory v0.8.0
 //
 // 8888888888                888
 // 888                       888
@@ -13,32 +13,32 @@
 //                                                  Y8b d88P
 //                                                   "Y88P"
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
-import "./Archetype.sol";
-import "./ArchetypeLogic.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/ClonesUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./ArchetypeErc1155.sol";
+import "./ArchetypeLogicErc1155.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Factory is OwnableUpgradeable {
+contract FactoryErc1155 is Ownable {
   event CollectionAdded(address indexed sender, address indexed receiver, address collection);
   address public archetype;
 
-  function initialize(address archetype_) public initializer {
+  constructor(address archetype_) {
     archetype = archetype_;
-    __Ownable_init();
   }
 
-  /// @notice config is a struct in the shape of {string placeholder; string base; uint64 supply; bool permanent;}
   function createCollection(
     address _receiver,
     string memory name,
     string memory symbol,
-    Config calldata config
+    Config calldata config,
+    PayoutConfig calldata payoutConfig
   ) external payable returns (address) {
-    address clone = ClonesUpgradeable.clone(archetype);
-    Archetype token = Archetype(clone);
-    token.initialize(name, symbol, config, _receiver);
+    bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
+    address clone = Clones.cloneDeterministic(archetype, salt);
+    ArchetypeErc1155Random token = ArchetypeErc1155Random(clone);
+    token.initialize(name, symbol, config, payoutConfig, _receiver);
 
     token.transferOwnership(_receiver);
     if (msg.value > 0) {

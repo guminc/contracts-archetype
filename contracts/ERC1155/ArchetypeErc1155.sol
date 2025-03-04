@@ -15,21 +15,14 @@
 
 pragma solidity ^0.8.4;
 
-import "./ArchetypeLogic.sol";
+import "./ArchetypeLogicErc1155.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "solady/src/utils/LibString.sol";
-import "closedsea/src/OperatorFilterer.sol";
 import "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
-contract Archetype is
-  Initializable,
-  ERC1155Upgradeable,
-  OperatorFilterer,
-  OwnableUpgradeable,
-  ERC2981Upgradeable
-{
+contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeable, ERC2981Upgradeable {
   //
   // EVENTS
   //
@@ -150,7 +143,7 @@ contract Archetype is
         tokenIds: tokenIdList
       });
     }
-    ArchetypeLogic.validateMint(
+    ArchetypeLogicErc1155.validateMint(
       invite,
       config,
       auth,
@@ -179,7 +172,7 @@ contract Archetype is
       _listSupply[auth.key] += quantity;
     }
 
-    ArchetypeLogic.updateBalances(
+    ArchetypeLogicErc1155.updateBalances(
       invite,
       config,
       _ownerBalance,
@@ -209,8 +202,8 @@ contract Archetype is
       uint256[] memory quantities;
       if (i.randomize) {
         // to avoid stack too deep errors
-        uint256 seed = ArchetypeLogic.random();
-        tokenIds = ArchetypeLogic.getRandomTokenIds(
+        uint256 seed = ArchetypeLogicErc1155.random();
+        tokenIds = ArchetypeLogicErc1155.getRandomTokenIds(
           _tokenSupply,
           config.maxSupply,
           i.tokenIds,
@@ -234,7 +227,7 @@ contract Archetype is
         tokenIds: tokenIds
       });
     }
-    ArchetypeLogic.validateMint(
+    ArchetypeLogicErc1155.validateMint(
       i,
       config,
       auth,
@@ -258,7 +251,7 @@ contract Archetype is
       _listSupply[auth.key] += quantity;
     }
 
-    ArchetypeLogic.updateBalances(i, config, _ownerBalance, _affiliateBalance, affiliate, quantity);
+    ArchetypeLogicErc1155.updateBalances(i, config, _ownerBalance, _affiliateBalance, affiliate, quantity);
   }
 
   function uri(uint256 tokenId) public view override returns (string memory) {
@@ -276,7 +269,7 @@ contract Archetype is
   }
 
   function withdrawTokens(address[] memory tokens) public {
-    ArchetypeLogic.withdrawTokens(config, _ownerBalance, _affiliateBalance, owner(), tokens);
+    ArchetypeLogicErc1155.withdrawTokens(config, _ownerBalance, _affiliateBalance, owner(), tokens);
   }
 
   function ownerBalance() external view returns (OwnerBalance memory) {
@@ -524,63 +517,6 @@ contract Archetype is
       revert NotPlatform();
     }
     _;
-  }
-
-  // OPTIONAL ROYALTY ENFORCEMENT WITH OPENSEA
-  function enableRoyaltyEnforcement() external onlyOwner {
-    if (options.royaltyEnforcementLocked) {
-      revert LockedForever();
-    }
-    _registerForOperatorFiltering();
-    options.royaltyEnforcementEnabled = true;
-  }
-
-  function disableRoyaltyEnforcement() external onlyOwner {
-    if (options.royaltyEnforcementLocked) {
-      revert LockedForever();
-    }
-    options.royaltyEnforcementEnabled = false;
-  }
-
-  /// @notice the password is "forever"
-  function lockRoyaltyEnforcement(string memory password) external onlyOwner {
-    if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
-      revert WrongPassword();
-    }
-
-    options.royaltyEnforcementLocked = true;
-  }
-
-  function setApprovalForAll(address operator, bool approved)
-    public
-    override
-    onlyAllowedOperatorApproval(operator)
-  {
-    super.setApprovalForAll(operator, approved);
-  }
-
-  function safeTransferFrom(
-    address from,
-    address to,
-    uint256 tokenId,
-    uint256 amount,
-    bytes memory data
-  ) public override onlyAllowedOperator(from) {
-    super.safeTransferFrom(from, to, tokenId, amount, data);
-  }
-
-  function safeBatchTransferFrom(
-    address from,
-    address to,
-    uint256[] memory ids,
-    uint256[] memory amounts,
-    bytes memory data
-  ) public override onlyAllowedOperator(from) {
-    super.safeBatchTransferFrom(from, to, ids, amounts, data);
-  }
-
-  function _operatorFilteringEnabled() internal view override returns (bool) {
-    return options.royaltyEnforcementEnabled;
   }
 
   //ERC2981 ROYALTY
