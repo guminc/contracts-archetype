@@ -37,7 +37,7 @@ contract FactoryErc1155 is Ownable {
   ) external payable returns (address) {
     bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
     address clone = Clones.cloneDeterministic(archetype, salt);
-    ArchetypeErc1155Random token = ArchetypeErc1155Random(clone);
+    ArchetypeErc1155 token = ArchetypeErc1155(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
 
     token.transferOwnership(_receiver);

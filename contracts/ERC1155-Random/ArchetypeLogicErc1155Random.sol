@@ -214,7 +214,6 @@ library ArchetypeLogicErc1155Random {
     Config storage config,
     Auth calldata auth,
     mapping(address => mapping(bytes32 => uint256)) storage minted,
-    mapping(bytes32 => uint256) storage listSupply,
     bytes calldata signature,
     ValidationArgs memory args,
     uint256 cost
@@ -256,7 +255,7 @@ library ArchetypeLogicErc1155Random {
       }
 
       if (i.maxSupply < UINT32_MAX) {
-        totalAfterMint = listSupply[auth.key] + args.quantity;
+        totalAfterMint = args.listSupply + args.quantity;
         if (totalAfterMint > i.maxSupply) {
           revert ListMaxSupplyExceeded();
         }

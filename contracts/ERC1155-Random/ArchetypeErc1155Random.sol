@@ -178,7 +178,7 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
       )
     );
 
-    ArchetypeLogicErc1155Random.validateMint(invite, config, auth, _minted, _listSupply, signature, args, cost);
+    ArchetypeLogicErc1155Random.validateMint(invite, config, auth, _minted, signature, args, cost);
 
     if (invite.limit < invite.maxSupply) {
       _minted[_msgSender()][auth.key] += totalQuantity;
