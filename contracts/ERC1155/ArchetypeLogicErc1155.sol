@@ -55,11 +55,6 @@ struct Auth {
   bytes32[] proof;
 }
 
-struct BonusDiscount {
-  uint16 numMints;
-  uint16 numBonusMints;
-}
-
 struct Config {
   string baseUri;
   address affiliateSigner;
@@ -117,6 +112,7 @@ struct ValidationArgs {
   address affiliate;
   uint256[] quantities;
   uint256[] tokenIds;
+  uint256 totalQuantity;
   uint256 listSupply;
 }
 
@@ -175,23 +171,6 @@ library ArchetypeLogicErc1155 {
     }
 
     return cost;
-  }
-
-  function bonusMintsAwarded(uint256 numNfts, uint256 packedDiscount) internal pure returns (uint256) {
-    for (uint8 i = 0; i < 8; i++) {
-        uint32 discount = uint32((packedDiscount >> (32 * i)) & 0xFFFFFFFF);
-        uint16 tierNumMints = uint16(discount >> 16);
-        uint16 tierBonusMints = uint16(discount);
-
-        if (tierNumMints == 0) {
-            break; // End of valid discounts
-        }
-
-        if (numNfts >= tierNumMints) {
-            return (numNfts / tierNumMints) * tierBonusMints;
-        }
-    }
-    return 0;
   }
 
   function validateMint(

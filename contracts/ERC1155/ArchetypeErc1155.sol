@@ -109,82 +109,40 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
     address affiliate,
     bytes calldata signature
   ) external payable {
-    // todo: figure out IR error
-    revert NotSupported();
-    // if (quantityList.length != toList.length || quantityList.length != tokenIdList.length) {
-    //   revert InvalidConfig();
-    // }
+    if (quantityList.length != toList.length || quantityList.length != tokenIdList.length) {
+      revert InvalidConfig();
+    }
 
-    // AdvancedInvite storage invite = invites[auth.key];
+    uint256 quantity;
+    for (uint256 i = 0; i < quantityList.length; i++) {
+      quantity += quantityList[i];
+    }
 
-    // if (invite.unitSize > 1) {
-    //   revert NotSupported();
-    // }
+    ValidationArgs memory args;
+    {
+      args = ValidationArgs({
+        owner: owner(),
+        affiliate: affiliate,
+        quantities: quantityList,
+        tokenIds: tokenIdList,
+        totalQuantity: quantity,
+        listSupply: _listSupply[auth.key]
+      });
+    }
 
-    // ValidationArgs memory args;
-    // {
-    //   args = ValidationArgs({
-    //     owner: owner(),
-    //     affiliate: affiliate,
-    //     quantities: quantityList,
-    //     tokenIds: tokenIdList,
-    //     listSupply: _listSupply[auth.key]
-    //   });
-    // }
+    AdvancedInvite storage invite = invites[auth.key];
 
+    if (invite.unitSize > 1) {
+      revert NotSupported();
+    }
 
-    // uint256 quantity = 0;
-    // for (uint256 i = 0; i < quantityList.length; i++) {
-    //   quantity += quantityList[i];
-    // }
-    
-    // uint128 cost = uint128(
-    //   ArchetypeLogicErc1155.computePrice(
-    //     invite,
-    //     config.affiliateDiscount,
-    //     quantity,
-    //     args.listSupply,
-    //     args.affiliate != address(0)
-    //   )
-    // );
-    
-    // ArchetypeLogicErc1155.validateMint(
-    //   invite,
-    //   config,
-    //   auth,
-    //   _minted,
-    //   _tokenSupply,
-    //   signature,
-    //   args,
-    //   cost
-    // );
+    validateAndCreditMint(invite, auth, args, affiliate, signature);
 
-    // for (uint256 i = 0; i < toList.length; i++) {
-    //   bytes memory _data;
-    //   _mint(toList[i], tokenIdList[i], quantityList[i], _data);
-    //   _tokenSupply[tokenIdList[i] - 1] += quantityList[i];
-    // }
-
-    // if (invite.limit < invite.maxSupply) {
-    //   _minted[msg.sender][auth.key] += quantity;
-    // }
-    // if (invite.maxSupply < 2**32 - 1) {
-    //   _listSupply[auth.key] += quantity;
-    // }
-
-    // ArchetypeLogicErc1155.updateBalances(
-    //   invite,
-    //   config,
-    //   _ownerBalance,
-    //   _affiliateBalance,
-    //   affiliate,
-    //   quantity,
-    //   cost
-    // );
-
-    // if (msg.value > cost) {
-    //   _refund(_msgSender(), msg.value - cost);
-    // }
+    for (uint256 i = 0; i < toList.length; i++) {
+      bytes memory _data;
+      _mint(toList[i], tokenIdList[i], quantityList[i], _data);
+      _tokenSupply[tokenIdList[i] - 1] += quantityList[i];
+    }
   }
 
   function mintTo(
@@ -201,14 +159,10 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
     }
 
     AdvancedInvite storage invite = invites[auth.key];
-    uint256 packedDiscount = packedBonusDiscounts[auth.key];
 
     if (invite.unitSize > 1) {
       quantity = quantity * invite.unitSize;
     }
-
-    uint256 numBonusMints = ArchetypeLogicErc1155.bonusMintsAwarded(quantity, packedDiscount);
-    uint256 totalQuantity = quantity + numBonusMints;
 
     ValidationArgs memory args;
     {
@@ -221,32 +175,54 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
         affiliate: affiliate,
         quantities: quantities,
         tokenIds: tokenIds,
+        totalQuantity: quantity,
         listSupply: _listSupply[auth.key]
       });
     }
 
-    uint128 cost = uint128(
-      ArchetypeLogicErc1155.computePrice(
-        invite,
-        config.affiliateDiscount,
-        quantity,
-        args.listSupply,
-        args.affiliate != address(0)
-      )
-    );
-
-    ArchetypeLogicErc1155.validateMint(invite, config, auth, _minted, _tokenSupply, signature, args, cost);
+    validateAndCreditMint(invite, auth, args, affiliate, signature);
 
     for (uint256 j = 0; j < args.tokenIds.length; j++) {
       bytes memory _data;
       _mint(to, args.tokenIds[j], args.quantities[j], _data);
       _tokenSupply[args.tokenIds[j] - 1] += args.quantities[j];
     }
+  }
+
+  function validateAndCreditMint(
+      AdvancedInvite storage invite,
+      Auth calldata auth,
+      ValidationArgs memory args,
+      address affiliate,
+      bytes calldata signature
+    ) internal {
+
+     uint128 cost = uint128(
+      ArchetypeLogicErc1155.computePrice(
+        invite,
+        config.affiliateDiscount,
+        args.totalQuantity,
+        args.listSupply,
+        args.affiliate != address(0)
+      )
+    );
+    
+    ArchetypeLogicErc1155.validateMint(
+      invite,
+      config,
+      auth,
+      _minted,
+      _tokenSupply,
+      signature,
+      args,
+      cost
+    );
+
     if (invite.limit < invite.maxSupply) {
-      _minted[_msgSender()][auth.key] += totalQuantity;
+      _minted[msg.sender][auth.key] += args.totalQuantity;
     }
-    if (invite.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += totalQuantity;
+    if (invite.maxSupply < 2**32 - 1) {
+      _listSupply[auth.key] += args.totalQuantity;
     }
 
     ArchetypeLogicErc1155.updateBalances(
@@ -255,7 +231,7 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
       _ownerBalance,
       _affiliateBalance,
       affiliate,
-      quantity,
+      args.totalQuantity,
       cost
     );
 
@@ -439,32 +415,6 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
 
   function setMaxBatchSize(uint16 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
-  }
-
-  function setBonusDiscounts(bytes32 _key, BonusDiscount[] calldata _bonusDiscounts) public onlyOwner {
-    if(_bonusDiscounts.length > 8) {
-      revert InvalidConfig();
-    }
-
-    uint256 packed;
-    for (uint8 i = 0; i < _bonusDiscounts.length; i++) {
-        if (i > 0 && _bonusDiscounts[i].numMints >= _bonusDiscounts[i - 1].numMints) {
-            revert InvalidConfig();
-        }
-        uint32 discount = (uint32(_bonusDiscounts[i].numMints) << 16) | uint32(_bonusDiscounts[i].numBonusMints);
-        packed |= uint256(discount) << (32 * i);
-    }
-    packedBonusDiscounts[_key] = packed;
-  }
-
-  function setBonusInvite(
-    bytes32 _key,
-    bytes32 _cid,
-    AdvancedInvite calldata _advancedInvite,
-    BonusDiscount[] calldata _bonusDiscount
-  ) external _onlyOwner {
-    setBonusDiscounts(_key, _bonusDiscount);
-    setAdvancedInvite(_key, _cid, _advancedInvite);
   }
 
   function setInvite(
