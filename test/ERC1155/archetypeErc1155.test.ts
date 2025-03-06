@@ -1,22 +1,29 @@
-import { ethers, upgrades } from "hardhat";
+import { ethers } from "hardhat";
 
 import { expect } from "chai";
-import {
-  Archetype__factory,
-  Archetype as IArchetype,
-  ArchetypeLogic__factory,
-  Factory__factory,
-} from "../typechain";
 import Invitelist from "../lib/invitelist";
-import { IArchetypeConfig } from "../lib/types";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import {
+  IArchetypeErc1155Config,
+  IArchetypePayoutConfig,
+} from "../lib/types";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import ipfsh from "ipfsh";
-import { Contract } from "ethers";
+import {
+  ArchetypeErc1155,
+  ArchetypeBatch,
+  ArchetypeLogicErc1155,
+  ArchetypePayouts,
+  FactoryErc1155,
+  TestErc20,
+} from "../../typechain-types";
+import { BaseContract } from "ethers";
 
 const DEFAULT_NAME = "Pookie";
 const DEFAULT_SYMBOL = "POOKIE";
 let AFFILIATE_SIGNER: SignerWithAddress;
-let DEFAULT_CONFIG: IArchetypeConfig;
+let DEFAULT_CONFIG: IArchetypeErc1155Config;
+let DEFAULT_PAYOUT_CONFIG: IArchetypePayoutConfig;
+
 // this is an IPFS content ID which stores a list of addresses ({address: string[]})
 // eg: https://ipfs.io/ipfs/bafkreih2kyxirba6a6dyzt4tsdqb5iim3soprumtewq6garaohkfknqlaq
 // utility for converting CID to bytes32: https://github.com/factoria-org/ipfsh
@@ -29,57 +36,91 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 const HASHONE = "0x0000000000000000000000000000000000000000000000000000000000000001";
 const HASH256 = "0x00000000000000000000000000000000000000000000000000000000000000ff";
 
-describe("Factory", function () {
-  let Archetype: Archetype__factory;
-  let archetype: IArchetype;
-  let ArchetypeLogic: ArchetypeLogic__factory;
-  let archetypeLogic: Contract;
-  let Factory: Factory__factory;
-  let factory: Contract;
+function asContractType<T extends BaseContract>(contract: any): T {
+  return contract as T;
+}
+
+describe("FactoryErc1155", function () {
+  let ArchetypeErc1155;
+  let archetype: ArchetypeErc1155;
+  let archetypeLogic: ArchetypeLogicErc1155;
+  let archetypeBatch: ArchetypeBatch;
+  let archetypePayouts: ArchetypePayouts;
+  let factory: FactoryErc1155;
 
   before(async function () {
     AFFILIATE_SIGNER = (await ethers.getSigners())[4]; // account[4]
     DEFAULT_CONFIG = {
-      baseUri: "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
+      baseUri:
+        "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
       affiliateSigner: AFFILIATE_SIGNER.address,
-      ownerAltPayout: ZERO,
-      superAffiliatePayout: ZERO,
       maxSupply: [5000],
       maxBatchSize: 20,
       affiliateFee: 1500,
-      platformFee: 500,
+      affiliateDiscount: 0,
       defaultRoyalty: 500,
-      discounts: {
-        affiliateDiscount: 0,
-        mintTiers: [],
-        // [{
-        //   numMints: number;
-        //   mintDiscount: number;
-        // }];
-      },
+    };
+    DEFAULT_PAYOUT_CONFIG = {
+      ownerBps: 9500,
+      platformBps: 500,
+      partnerBps: 0,
+      superAffiliateBps: 0,
+      partner: ZERO,
+      superAffiliate: ZERO,
+      ownerAltPayout: ZERO,
     };
 
-    ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
-    Archetype = await ethers.getContractFactory("Archetype", {
-      libraries: {
-        ArchetypeLogic: archetypeLogic.address,
-      },
+    const ArchetypeBatch = await ethers.getContractFactory("ArchetypeBatch");
+    archetypeBatch = asContractType<ArchetypeBatch>(
+      await ArchetypeBatch.deploy()
+    );
+
+    const ArchetypeLogicErc1155 = await ethers.getContractFactory(
+      "ArchetypeLogicErc1155"
+    );
+    archetypeLogic = asContractType<ArchetypeLogicErc1155>(
+      await ArchetypeLogicErc1155.deploy()
+    );
+
+    ArchetypeErc1155 = await ethers.getContractFactory(
+      "ArchetypeErc1155",
+      {
+        libraries: {
+          ArchetypeLogicErc1155Random: await archetypeLogic.getAddress(),
+        },
+      }
+    );
+
+    const ArchetypePayouts = await ethers.getContractFactory(
+      "ArchetypePayouts"
+    );
+    archetypePayouts = asContractType<ArchetypePayouts>(
+      await ArchetypePayouts.deploy()
+    );
+
+    archetype = await ArchetypeErc1155.deploy();
+    const archetypeAddress = await archetype.getAddress();
+
+    const Factory = await ethers.getContractFactory("FactoryErc1155Random");
+    factory = asContractType<FactoryErc1155>(
+      await Factory.deploy(archetypeAddress)
+    );
+
+    const factoryAddress = await factory.getAddress();
+
+    console.log({
+      factoryAddress: factoryAddress,
+      archetypeAddress: archetypeAddress,
     });
+  });
 
-    archetype = await Archetype.deploy();
-
-    await archetype.deployed();
-
-    Factory = await ethers.getContractFactory("Factory");
-
-    factory = await upgrades.deployProxy(Factory, [archetype.address], {
-      initializer: "initialize",
-    });
-
-    await factory.deployed();
-
-    console.log({ factoryAddress: factory.address, archetypeAddress: archetype.address });
+  beforeEach(async function () {
+    const [accountZero, owner, platform] = await ethers.getSigners();
+    // reset split balances between tests
+    if ((await archetypePayouts.balance(owner.address)) > ethers.toBigInt(0))
+      await archetypePayouts.connect(owner).withdraw();
+    if ((await archetypePayouts.balance(platform.address)) > ethers.toBigInt(0))
+      await archetypePayouts.connect(platform).withdraw();
   });
 
   it("should have platform set to test account", async function () {
@@ -99,14 +140,15 @@ describe("Factory", function () {
       accountOne.address,
       DEFAULT_NAME,
       DEFAULT_SYMBOL,
-      DEFAULT_CONFIG
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
     );
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();
@@ -122,6 +164,7 @@ describe("Factory", function () {
       "Flookie",
       DEFAULT_SYMBOL,
       DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
       accountOne.address
     );
     await res.wait();
@@ -129,21 +172,22 @@ describe("Factory", function () {
     expect(await archetype.name()).to.equal("Flookie");
 
     await expect(
-      archetype.initialize("Wookie", DEFAULT_SYMBOL, DEFAULT_CONFIG, accountOne.address)
+      archetype.initialize("Wookie", DEFAULT_SYMBOL, DEFAULT_CONFIG, DEFAULT_PAYOUT_CONFIG, accountOne.address)
     ).to.be.revertedWith("Initializable: contract is already initialized");
 
     const newCollection = await factory.createCollection(
       accountOne.address,
       DEFAULT_NAME,
       DEFAULT_SYMBOL,
-      DEFAULT_CONFIG
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
     );
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();
@@ -159,14 +203,15 @@ describe("Factory", function () {
       accountOne.address,
       DEFAULT_NAME,
       DEFAULT_SYMBOL,
-      DEFAULT_CONFIG
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
     );
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     const symbol = await nft.symbol();
     const owner = await nft.owner();
@@ -174,11 +219,11 @@ describe("Factory", function () {
     expect(symbol).to.equal(DEFAULT_SYMBOL);
     expect(owner).to.equal(accountOne.address);
 
-    ArchetypeLogic = await ethers.getContractFactory("ArchetypeLogic");
-    archetypeLogic = await ArchetypeLogic.deploy();
+    ArchetypeLogicErc1155 = await ethers.getContractFactory("ArchetypeLogicErc1155");
+    archetypeLogic = await ArchetypeLogicErc1155.deploy();
     const NewArchetype = await ethers.getContractFactory("Archetype", {
       libraries: {
-        ArchetypeLogic: archetypeLogic.address,
+        ArchetypeLogic: await archetypeLogic.getAddress(),
       },
     });
 
@@ -188,7 +233,7 @@ describe("Factory", function () {
 
     await newArchetype.deployed();
 
-    await factory.setArchetype(newArchetype.address);
+    await factory.setArchetype(await newArchetype.getAddress());
 
     const myArchetype = await factory.archetype();
 
@@ -198,14 +243,15 @@ describe("Factory", function () {
       accountOne.address,
       DEFAULT_NAME,
       DEFAULT_SYMBOL,
-      DEFAULT_CONFIG
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
     );
 
     const result1 = await anotherCollection.wait();
 
-    const anotherollectionAddress = result1.events[0].address || "";
+    const anotherollectionAddress = result1.logs[0].address || "";
 
-    const nft1 = Archetype.attach(anotherollectionAddress);
+    const nft1 = ArchetypeErc1155.attach(anotherollectionAddress);
 
     const symbol1 = await nft1.symbol();
     const owner1 = await nft1.owner();
@@ -226,9 +272,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await expect(nft.lockURI("forever")).to.be.revertedWith("Ownable: caller is not the owner");
   });
@@ -247,9 +293,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.08"),
@@ -290,9 +336,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     const addresses = [accountZero.address, accountOne.address];
     // const addresses = [...Array(5000).keys()].map(() => accountZero.address);
@@ -415,9 +461,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.08"),
@@ -443,7 +489,7 @@ describe("Factory", function () {
   });
 
   // reminder: If this test is failing with BalanceEmpty() errors, first ensure
-  // that the PLATFORM constant in Archetype.sol is set to local Hardhat network
+  // that the PLATFORM constant in ArchetypeErc1155sol is set to local Hardhat network
   // account[2]
   it("should validate affiliate signatures and withdraw to correct account", async function () {
     const [accountZero, accountOne, accountTwo, accountThree] = await ethers.getSigners();
@@ -461,9 +507,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.08"),
@@ -615,9 +661,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.1"),
@@ -699,9 +745,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.1"),
@@ -795,9 +841,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.1"),
@@ -862,9 +908,9 @@ describe("Factory", function () {
 
   //   const result = await newCollection.wait();
 
-  //   const newCollectionAddress = result.events[0].address || "";
+  //   const newCollectionAddress = result.logs[0].address || "";
 
-  //   const nft = Archetype.attach(newCollectionAddress);
+  //   const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
   //   await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
   //     price: ethers.utils.parseEther("0.02"),
@@ -911,9 +957,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     // CHANGE URI
     await nft.connect(owner).setBaseURI("test uri");
@@ -977,7 +1023,7 @@ describe("Factory", function () {
   //   );
   //   const resultBurn = await newCollectionBurn.wait();
   //   const newCollectionAddressBurn = resultBurn.events[0].address || "";
-  //   const nftBurn = Archetype.attach(newCollectionAddressBurn);
+  //   const nftBurn = ArchetypeErc1155.attach(newCollectionAddressBurn);
 
   //   const newCollectionMint = await factory.createCollection(
   //     owner.address,
@@ -987,7 +1033,7 @@ describe("Factory", function () {
   //   );
   //   const resultMint = await newCollectionMint.wait();
   //   const newCollectionAddressMint = resultMint.events[0].address || "";
-  //   const nftMint = Archetype.attach(newCollectionAddressMint);
+  //   const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
   //   await nftBurn.connect(owner).enableBurnToMint(nftMint.address, false, 2, 0, 5000);
   //   await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
@@ -1083,8 +1129,8 @@ describe("Factory", function () {
       DEFAULT_CONFIG
     );
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await expect(nft.connect(owner).setSuperAffiliatePayout(minter.address)).to.be.revertedWith(
       "NotPlatform"
@@ -1111,7 +1157,7 @@ describe("Factory", function () {
     // );
     // const resultBurn = await newCollectionBurn.wait();
     // const newCollectionAddressBurn = resultBurn.events[0].address || "";
-    // const nftBurn = Archetype.attach(newCollectionAddressBurn);
+    // const nftBurn = ArchetypeErc1155.attach(newCollectionAddressBurn);
 
     const newCollectionMint = await factory.createCollection(
       owner.address,
@@ -1121,7 +1167,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     // await nftBurn.connect(owner).enableBurnToMint(nftMint.address, false, 2, 0, 5000);
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
@@ -1219,9 +1265,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("0.02"),
@@ -1270,8 +1316,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     const invitelist = new Invitelist([owner.address]);
     const root = invitelist.root();
@@ -1345,8 +1391,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     // // mock opensea default block list addresses
     // ///The default OpenSea operator blocklist subscription.
@@ -1394,8 +1440,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     // console.log(owner.address);
     // console.log(holder.address);
@@ -1426,8 +1472,8 @@ describe("Factory", function () {
     );
 
     const result = await newCollection.wait();
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     const erc20 = await (await ethers.getContractFactory("TestErc20")).deploy();
     const tokenAddress = erc20.address;
@@ -1506,9 +1552,9 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
+    const newCollectionAddress = result.logs[0].address || "";
 
-    const nft = Archetype.attach(newCollectionAddress);
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setDutchInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("1"),
@@ -1571,8 +1617,8 @@ describe("Factory", function () {
 
     const result = await newCollection.wait();
 
-    const newCollectionAddress = result.events[0].address || "";
-    const nft = Archetype.attach(newCollectionAddress);
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155.attach(newCollectionAddress);
 
     await nft.connect(owner).setDutchInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("1"),
@@ -1642,7 +1688,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
@@ -1690,7 +1736,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: ethers.utils.parseEther("1"),
@@ -1759,7 +1805,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
@@ -1835,7 +1881,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
@@ -1900,7 +1946,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
@@ -1957,7 +2003,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
@@ -2018,7 +2064,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
@@ -2073,7 +2119,7 @@ describe("Factory", function () {
     );
     const resultMint = await newCollectionMint.wait();
     const newCollectionAddressMint = resultMint.events[0].address || "";
-    const nftMint = Archetype.attach(newCollectionAddressMint);
+    const nftMint = ArchetypeErc1155.attach(newCollectionAddressMint);
 
     await nftMint.connect(owner).setInvite(ethers.constants.HashZero, ipfsh.ctod(CID_ZERO), {
       price: 0,
