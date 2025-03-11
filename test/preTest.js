@@ -37,12 +37,23 @@ const erc1155RandomContractPath = path.resolve(
   __dirname,
   "../contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol"
 );
-const originalErc1155File = fs.readFileSync(erc1155RandomContractPath, "utf8");
+const originalErc1155RandomFile = fs.readFileSync(erc1155RandomContractPath, "utf8");
 fs.writeFileSync(
   "./contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol.bak",
-  originalErc1155File
+  originalErc1155RandomFile
 );
 replaceConstants(erc1155RandomContractPath);
+
+const erc1155ContractPath = path.resolve(
+  __dirname,
+  "../contracts/ERC1155/ArchetypeLogicErc1155.sol"
+);
+const originalErc1155File = fs.readFileSync(erc1155ContractPath, "utf8");
+fs.writeFileSync(
+  "./contracts/ERC1155/ArchetypeLogicErc1155.sol.bak",
+  originalErc1155File
+);
+replaceConstants(erc1155ContractPath);
 
 const brg404RandomContractPath = path.resolve(
   __dirname,

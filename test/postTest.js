@@ -9,8 +9,7 @@ const erc721aBackupFilePath = path.resolve(
   __dirname,
   "../contracts/ERC721a/ArchetypeLogicErc721a.sol.bak"
 );
-const erc721aBackupFile = fs.readFileSync(erc721aBackupFilePath, "utf8");
-fs.writeFileSync(erc721aContractPath, erc721aBackupFile);
+fs.writeFileSync(erc721aContractPath, fs.readFileSync(erc721aBackupFilePath, "utf8"));
 fs.unlinkSync(erc721aBackupFilePath);
 
 const erc1155RandomContractPath = path.resolve(
@@ -21,12 +20,25 @@ const erc1155RandomBackupFilePath = path.resolve(
   __dirname,
   "../contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol.bak"
 );
-const erc1155RandomBackupFile = fs.readFileSync(
+fs.writeFileSync(erc1155RandomContractPath, fs.readFileSync(
   erc1155RandomBackupFilePath,
   "utf8"
-);
-fs.writeFileSync(erc1155RandomContractPath, erc1155RandomBackupFile);
+));
 fs.unlinkSync(erc1155RandomBackupFilePath);
+
+const erc1155ContractPath = path.resolve(
+  __dirname,
+  "../contracts/ERC1155/ArchetypeLogicErc1155.sol"
+);
+const erc1155BackupFilePath = path.resolve(
+  __dirname,
+  "../contracts/ERC1155/ArchetypeLogicErc1155.sol.bak"
+);
+fs.writeFileSync(erc1155ContractPath, fs.readFileSync(
+  erc1155BackupFilePath,
+  "utf8"
+));
+fs.unlinkSync(erc1155BackupFilePath);
 
 const brg404ContractPath = path.resolve(
   __dirname,
@@ -36,6 +48,5 @@ const brg404BackupFilePath = path.resolve(
   __dirname,
   "../contracts/BURGERS404/ArchetypeLogicBurgers404.sol.bak"
 );
-const brg404BackupFile = fs.readFileSync(brg404BackupFilePath, "utf8");
-fs.writeFileSync(brg404ContractPath, brg404BackupFile);
+fs.writeFileSync(brg404ContractPath, fs.readFileSync(brg404BackupFilePath, "utf8"));
 fs.unlinkSync(brg404BackupFilePath);

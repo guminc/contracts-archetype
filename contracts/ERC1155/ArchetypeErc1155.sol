@@ -73,6 +73,7 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
       revert InvalidConfig();
     }
     config = config_;
+    _tokenSupply = new uint256[](config_.maxSupply.length);
     __Ownable_init();
 
     uint256 totalShares = payoutConfig_.ownerBps +

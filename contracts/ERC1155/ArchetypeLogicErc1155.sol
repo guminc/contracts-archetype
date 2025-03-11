@@ -117,9 +117,9 @@ struct ValidationArgs {
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
-address constant PLATFORM = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
-address constant BATCH = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
-address constant PAYOUTS = 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0;
+address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
+address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
+address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 
@@ -235,6 +235,18 @@ library ArchetypeLogicErc1155 {
     uint256[] memory checked = new uint256[](tokenSupply.length);
     for (uint256 j = 0; j < args.tokenIds.length; j++) {
       uint256 tokenId = args.tokenIds[j];
+      if (i.tokenIds.length != 0) {
+        bool isValid = false;
+        for (uint256 k = 0; k < i.tokenIds.length; k++) {
+          if (tokenId == i.tokenIds[k]) {
+            isValid = true;
+            break;
+          }
+        }
+        if (!isValid) {
+          revert InvalidTokenId();
+        }
+      }
 
       if (
         (tokenSupply[tokenId - 1] + checked[tokenId - 1] + args.quantities[j]) >
