@@ -20,14 +20,19 @@ import "./ArchetypeLogicErc1155Random.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+error InsufficientDeployFee();
+
 contract FactoryErc1155Random is Ownable {
   event CollectionAdded(address indexed sender, address indexed receiver, address collection);
+  event DeployFeeChanged(uint256 oldFee, uint256 newFee);
+  
   address public archetype;
-
+  uint256 public deployFee;
+  
   constructor(address archetype_) {
     archetype = archetype_;
   }
-
+  
   function createCollection(
     address _receiver,
     string memory name,
@@ -35,21 +40,63 @@ contract FactoryErc1155Random is Ownable {
     Config calldata config,
     PayoutConfig calldata payoutConfig
   ) external payable returns (address) {
+    if (msg.value < deployFee) {
+      revert InsufficientDeployFee();
+    }
+    
     bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
     address clone = Clones.cloneDeterministic(archetype, salt);
     ArchetypeErc1155Random token = ArchetypeErc1155Random(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
-
     token.transferOwnership(_receiver);
-    if (msg.value > 0) {
-      (bool sent, ) = payable(_receiver).call{ value: msg.value }("");
-      require(sent, "1");
+    
+    if (deployFee > 0) {
+      address payouts = PAYOUTS;
+      address[] memory recipients = new address[](1);
+      recipients[0] = PLATFORM;
+      uint16[] memory splits = new uint16[](1);
+      splits[0] = 10000;
+      ArchetypePayouts(payouts).updateBalances{value: deployFee}(
+        deployFee,
+        address(0), // native token
+        recipients,
+        splits
+      );
+      
+      // Forward any excess payment to the receiver
+      uint256 excess = msg.value - deployFee;
+      if (excess > 0) {
+        _refund(_receiver, excess);
+      }
+    } else if (msg.value > 0) {
+      _refund(_receiver, msg.value);
     }
+    
     emit CollectionAdded(_msgSender(), _receiver, clone);
     return clone;
   }
-
+  
   function setArchetype(address archetype_) public onlyOwner {
     archetype = archetype_;
+  }
+  
+  function setDeployFee(uint256 newFee) public _onlyPlatform {
+    uint256 oldFee = deployFee;
+    deployFee = newFee;
+    emit DeployFeeChanged(oldFee, newFee);
+  }
+  
+  modifier _onlyPlatform() {
+    if (msg.sender != PLATFORM) {
+      revert NotPlatform();
+    }
+    _;
+  }
+
+  function _refund(address to, uint256 refund) internal {
+    (bool success, ) = payable(to).call{ value: refund }("");
+    if (!success) {
+      revert TransferFailed();
+    }
   }
 }

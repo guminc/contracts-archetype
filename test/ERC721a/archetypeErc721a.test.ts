@@ -3023,6 +3023,72 @@ describe("FactoryErc721a", function () {
     ).to.be.revertedWithCustomError(archetypeLogic, "NotTokenOwner");
   });
 
+  it("should require a fee to deploy a collection", async function () {
+    const [accountZero, accountOne, accountTwo] = await ethers.getSigners();
+
+    const owner = accountOne;
+    const holder = accountZero;
+    const platform = accountTwo;
+
+    const deployPrice = ethers.parseEther('0.05')
+
+    await factory.connect(platform).setDeployFee(deployPrice)
+
+    expect(await factory.deployFee()).to.equal(deployPrice)
+
+    await expect(factory.createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
+    )).to.be.revertedWithCustomError(factory, "InsufficientDeployFee");
+
+    const newCollection = await factory.createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
+      { value: deployPrice }
+    );
+
+    const result = await newCollection.wait();
+
+    const newCollectionAddress = result.logs[0].address || "";
+
+    const nft = ArchetypeErc721a.attach(newCollectionAddress);
+
+    const symbol = await nft.symbol();
+
+    await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice);
+
+    // test overpay and refund
+
+    const preUserBalance = await ethers.provider.getBalance(accountOne.address);
+
+    const newCollectionTwo = await factory.connect(accountOne).createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
+      { value: ethers.parseEther("0.1") }
+    );
+
+    const postFactoryBalance = await ethers.provider.getBalance(
+      await factory.getAddress()
+    );
+    const postUserBalance = await ethers.provider.getBalance(accountOne.address);
+
+    const delta = ethers.parseEther("0.001");
+    expect(postUserBalance).closeTo(preUserBalance - deployPrice, delta);
+    expect(postFactoryBalance).eq(0);
+
+    await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice * BigInt(2));
+
+  });
+
 });
 
 // todo: add test to ensure affiliate signer can't be zero address
