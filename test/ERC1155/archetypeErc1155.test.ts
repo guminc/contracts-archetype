@@ -2080,6 +2080,84 @@ describe("FactoryErc1155", function () {
 
     await expect(await nftMint.totalSupply()).to.be.equal(40);
   });
+
+  it("should account overpaid mints and refunds correctly", async () => {
+      const [accountZero, accountOne, accountTwo, accountThree, accountFour] =
+        await ethers.getSigners();
+  
+      const owner = accountOne;
+      const platform = accountTwo;
+      const affiliate = accountThree;
+      const dev = accountFour;
+  
+      const newCollection = await factory.createCollection(
+        owner.address,
+        DEFAULT_NAME,
+        DEFAULT_SYMBOL,
+        DEFAULT_CONFIG,
+        DEFAULT_PAYOUT_CONFIG
+      );
+  
+      const result = await newCollection.wait();
+  
+      const newCollectionAddress = result.logs[0].address || "";
+  
+      const nft = ArchetypeErc1155.attach(newCollectionAddress);
+  
+      const mintPrice = ethers.parseEther("0.08");
+      const paidPrice = ethers.parseEther("0.20");
+  
+      await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+        price: mintPrice,
+        start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+        end: 0,
+        limit: 300,
+        maxSupply: 100,
+        unitSize: 0,
+        tokenAddress: ZERO,
+        tokenIds: [1],
+      });
+  
+      // valid signature (from affiliateSigner)
+      const referral = await AFFILIATE_SIGNER.signMessage(
+        ethers.getBytes(
+          ethers.solidityPackedKeccak256(["address"], [affiliate.address])
+        )
+      );
+  
+      const preContractBalance = await ethers.provider.getBalance(
+        await nft.getAddress()
+      );
+      const preUserBalance = await ethers.provider.getBalance(accountZero);
+  
+      await nft
+        .connect(accountZero)
+        .mintToken(
+          { key: ethers.ZeroHash, proof: [] },
+          1,
+          1,
+          affiliate.address,
+          referral,
+          {
+            value: paidPrice,
+          }
+        );
+  
+      const postContractBalance = await ethers.provider.getBalance(
+        await nft.getAddress()
+      );
+      const postUserBalance = await ethers.provider.getBalance(accountZero);
+  
+      const delta = ethers.parseEther("0.001");
+      expect(postUserBalance).closeTo(preUserBalance - mintPrice, delta);
+      expect(postContractBalance).eq(preContractBalance + mintPrice);
+  
+      await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.068")); // 85%
+      await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
+        ethers.parseEther("0.012")
+      ); // 15%
+    });
+  
 });
 
 // todo: add test to ensure affiliate signer can't be zero address
