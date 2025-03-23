@@ -48,6 +48,9 @@ error InvalidTokenId();
 error MintToZeroAddress();
 error InvalidSeed();
 error SeedHashAlreadyExists();
+error NotListed();
+error TokenAlreadyRevealed();
+error PriceTooLow();
 
 //
 // STRUCTS
@@ -55,11 +58,6 @@ error SeedHashAlreadyExists();
 struct Auth {
   bytes32 key;
   bytes32[] proof;
-}
-
-struct BonusDiscount {
-  uint16 numMints;
-  uint16 numBonusMints;
 }
 
 struct Config {
@@ -190,23 +188,6 @@ library ArchetypeLogicErc1155Random {
     }
 
     return cost;
-  }
-
-  function bonusMintsAwarded(uint256 numNfts, uint256 packedDiscount) internal pure returns (uint256) {
-    for (uint8 i = 0; i < 8; i++) {
-        uint32 discount = uint32((packedDiscount >> (32 * i)) & 0xFFFFFFFF);
-        uint16 tierNumMints = uint16(discount >> 16);
-        uint16 tierBonusMints = uint16(discount);
-
-        if (tierNumMints == 0) {
-            break; // End of valid discounts
-        }
-
-        if (numNfts >= tierNumMints) {
-            return (numNfts / tierNumMints) * tierBonusMints;
-        }
-    }
-    return 0;
   }
 
   function validateMint(
@@ -449,6 +430,206 @@ library ArchetypeLogicErc1155Random {
       }
       emit Withdrawal(msgSender, tokenAddress, wad);
     }
+  }
+
+  function removeFromPriceList(
+    uint256 seedHash,
+    mapping(uint256 => uint256) storage nextLowestHash,
+    mapping(uint256 => uint256) storage seedHashPrice,
+    uint256 lowestPriceHash
+  ) public returns (uint256) {
+    uint256 newLowestPriceHash = lowestPriceHash;
+    if (seedHash == lowestPriceHash) {
+        // It was the lowest price, update to next lowest
+        newLowestPriceHash =  nextLowestHash[seedHash];
+    } else {
+        // Find previous hash that points to this one
+        uint256 current = lowestPriceHash;
+        
+        while (current != 0 && nextLowestHash[current] != seedHash) {
+            current = nextLowestHash[current];
+        }
+        
+        if (current != 0) {
+            // Update the link to skip over the hash being removed
+            nextLowestHash[current] = nextLowestHash[seedHash];
+        }
+    }
+    
+    // Clear this hashed pointers
+    nextLowestHash[seedHash] = 0;
+    seedHashPrice[seedHash] = 0;
+
+    return newLowestPriceHash;
+  }
+
+  function insertIntoPriceList(
+    uint256 seedHash,
+    uint256 price,
+    mapping(uint256 => uint256) storage nextLowestHash,
+    mapping(uint256 => uint256) storage seedHashPrice,
+    uint256 lowestPriceHash
+  ) public returns (uint256) {
+    seedHashPrice[seedHash] = price;
+    uint256 newLowestPriceHash = lowestPriceHash;
+
+    uint256 lowestPrice = seedHashPrice[lowestPriceHash];
+    if (lowestPrice == 0 || price < lowestPrice) {
+        // New hash is the lowest price
+        nextLowestHash[seedHash] = lowestPriceHash;
+        newLowestPriceHash = seedHash;
+    } else {
+        // Find correct position to insert
+        uint256 current = lowestPriceHash;
+        uint256 next = nextLowestHash[current];
+        
+        while (next != 0 && seedHashPrice[next] <= price) {
+            current = next;
+            next = nextLowestHash[current];
+        }
+        
+        // Insert between current and next
+        nextLowestHash[seedHash] = next;
+        nextLowestHash[current] = seedHash;
+    }
+
+    return newLowestPriceHash;
+  }
+
+  function findLowestPricedToken(
+    mapping(uint256 => uint256) storage nextLowestHash,
+    mapping(uint256 => uint256) storage seedHashPrice,
+    mapping(uint256 => address) storage seedHashOwner,
+    mapping(uint256 => MintInfo) storage seedHashMintInfo,
+    uint256 lowestPriceHash
+  ) public view returns (uint256, address, uint256) {
+    // Start with the lowest price hash
+    uint256 seedHash = lowestPriceHash;
+    
+    // Loop through the list until we find a valid token
+    while (seedHash != 0) {
+        // Check if this token is valid (exists and is for sale)
+        if (seedHashPrice[seedHash] > 0 && seedHashOwner[seedHash] != address(0)) {
+            // Check if it hasn't been revealed yet
+            MintInfo memory mintInfo = seedHashMintInfo[seedHash];
+            if (mintInfo.quantity != 0 && mintInfo.key != bytes32("fulfilled")) {
+                // Found a valid token
+                return (seedHash, seedHashOwner[seedHash], seedHashPrice[seedHash]);
+            }
+        }
+        
+        // Move to the next token in the list
+        seedHash = nextLowestHash[seedHash];
+    }
+    
+    // If we've gone through the entire list without finding a valid token
+    revert NotListed();
+  }
+
+  function processPurchase(
+    uint256 seedHash,
+    address seller,
+    uint256 price,
+    PayoutConfig storage payoutConfig,
+    mapping(uint256 => uint256) storage nextLowestHash,
+    mapping(uint256 => uint256) storage seedHashPrice,
+    mapping(uint256 => address) storage seedHashOwner,
+    uint256 lowestPriceHash
+  ) public returns (uint256) {
+    // Update token state
+    seedHashPrice[seedHash] = 0;
+    seedHashOwner[seedHash] = _msgSender();
+    
+    // Update the lowest price hash if needed
+    uint256 newLowestPriceHash = lowestPriceHash;
+    if (seedHash == lowestPriceHash) {
+        // If we're buying the lowest priced token, the new lowest is the next one
+        newLowestPriceHash = nextLowestHash[seedHash];
+    }
+    
+    // Handle payments
+    uint256 platformFee = (price * payoutConfig.platformBps) / 10000;
+    uint256 sellerAmount = price - platformFee;
+    
+    // Pay platform fee
+    payPlatform(platformFee);
+    
+    // Pay seller
+    (bool success, ) = payable(seller).call{value: sellerAmount}("");
+    if (!success) {
+        revert TransferFailed();
+    }
+    
+    return newLowestPriceHash;
+  }
+
+  function getAvailableUnrevealedTokens(
+    uint256 count,
+    mapping(uint256 => uint256) storage nextLowestHash,
+    mapping(uint256 => uint256) storage seedHashPrice,
+    mapping(uint256 => address) storage seedHashOwner,
+    mapping(uint256 => MintInfo) storage seedHashMintInfo,
+    uint256 lowestPriceHash
+  ) public view returns (uint256[] memory tokenHashes, uint256[] memory prices, address[] memory sellers) {
+    // Initialize arrays to store results with maximum size of count
+    tokenHashes = new uint256[](count);
+    prices = new uint256[](count);
+    sellers = new address[](count);
+    
+    uint256 foundCount = 0;
+    uint256 currentHash = lowestPriceHash;
+    
+    // Traverse the linked list to find valid tokens
+    while (currentHash != 0 && foundCount < count) {
+        // Check if this token is valid (exists, is for sale, and not revealed)
+        if (seedHashPrice[currentHash] > 0 && seedHashOwner[currentHash] != address(0)) {
+            MintInfo memory mintInfo = seedHashMintInfo[currentHash];
+            if (mintInfo.quantity != 0 && mintInfo.key != bytes32("fulfilled")) {
+                // Found a valid token
+                tokenHashes[foundCount] = currentHash;
+                prices[foundCount] = seedHashPrice[currentHash];
+                sellers[foundCount] = seedHashOwner[currentHash];
+                foundCount++;
+            }
+        }
+        
+        // Move to the next token in the list
+        currentHash = nextLowestHash[currentHash];
+    }
+    
+    // If we found fewer tokens than requested, resize the arrays
+    if (foundCount < count) {
+        // Create new arrays of the correct size
+        uint256[] memory resizedTokenHashes = new uint256[](foundCount);
+        uint256[] memory resizedPrices = new uint256[](foundCount);
+        address[] memory resizedSellers = new address[](foundCount);
+        
+        // Copy data to the resized arrays
+        for (uint256 i = 0; i < foundCount; i++) {
+            resizedTokenHashes[i] = tokenHashes[i];
+            resizedPrices[i] = prices[i];
+            resizedSellers[i] = sellers[i];
+        }
+        
+        // Return the resized arrays
+        return (resizedTokenHashes, resizedPrices, resizedSellers);
+    }
+    
+    return (tokenHashes, prices, sellers);
+  }
+
+
+  function payPlatform(uint256 fee) public {
+    address[] memory recipients = new address[](1);
+    recipients[0] = PLATFORM;
+    uint16[] memory splits = new uint16[](1);
+    splits[0] = 10000;
+    ArchetypePayouts(PAYOUTS).updateBalances{value: fee}(
+      fee,
+      address(0), // native token
+      recipients,
+      splits
+    );
   }
 
   function validateAffiliate(

@@ -31,16 +31,25 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   event Withdrawal(address indexed src, address token, uint128 wad);
   event RequestRandomness(uint256 indexed seedHash);
   event FulfillRandomness(uint256 indexed seedHash, uint256 seed, uint256 combinedSeed);
+  event UnrevealedTokenListed(uint256 indexed seedHash, uint256 price);
+  event UnrevealedTokenSold(uint256 indexed seedHash, address from, address to, uint256 price);
+  event UnrevealedTokenDelisted(uint256 indexed seedHash);
 
   //
   // VARIABLES
   //
   mapping(bytes32 => AdvancedInvite) public invites;
-  mapping(bytes32 => uint256) public packedBonusDiscounts;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
   mapping(address => uint128) private _ownerBalance;
   mapping(address => mapping(address => uint128)) private _affiliateBalance;
+
+
+  mapping(uint256 => address) public seedHashOwner; // Current owner of unrevealed token
+  mapping(uint256 => uint256) public seedHashPrice; // Listed price if for sale (0 means not for sale)
+  
+  uint256 public lowestPriceHash; // Current lowest price hash
+  mapping(uint256 => uint256) public nextLowestHash; // Points to next lowest priced hash
 
   uint256 public totalSupply;
 
@@ -127,22 +136,23 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     }
 
     AdvancedInvite storage invite = invites[auth.key];
-    uint256 packedDiscount = packedBonusDiscounts[auth.key];
 
     if (invite.unitSize > 1) {
       quantity = quantity * invite.unitSize;
     }
 
-    uint256 numBonusMints = ArchetypeLogicErc1155Random.bonusMintsAwarded(quantity, packedDiscount);
-
-    validateAndCreditMint(invite, auth, quantity, numBonusMints, totalSupply, affiliate, signature);
+    validateAndCreditMint(invite, auth, quantity, totalSupply, affiliate, signature);
   
     seedHashMintInfo[seedHash] = MintInfo({
       key: auth.key,
       to: to,
-      quantity: quantity + numBonusMints,
+      quantity: quantity,
       blockNumber: block.number
     });
+
+    // Set initial owner of the unrevealed token
+    seedHashOwner[seedHash] = to;
+
     emit RequestRandomness(seedHash);
   }
 
@@ -150,12 +160,11 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     AdvancedInvite storage invite,
     Auth calldata auth,
     uint256 quantity,
-    uint256 numBonusMints,
     uint256 curSupply,
     address affiliate,
     bytes calldata signature
   ) internal {
-    uint256 totalQuantity = quantity + numBonusMints;
+    uint256 totalQuantity = quantity;
 
     ValidationArgs memory args;
     {
@@ -419,31 +428,6 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     config.maxBatchSize = maxBatchSize;
   }
 
-  function setBonusDiscounts(bytes32 _key, BonusDiscount[] calldata _bonusDiscounts) public onlyOwner {
-    if(_bonusDiscounts.length > 8) {
-      revert InvalidConfig();
-    }
-
-    uint256 packed;
-    for (uint8 i = 0; i < _bonusDiscounts.length; i++) {
-        if (i > 0 && _bonusDiscounts[i].numMints >= _bonusDiscounts[i - 1].numMints) {
-            revert InvalidConfig();
-        }
-        uint32 discount = (uint32(_bonusDiscounts[i].numMints) << 16) | uint32(_bonusDiscounts[i].numBonusMints);
-        packed |= uint256(discount) << (32 * i);
-    }
-    packedBonusDiscounts[_key] = packed;
-  }
-
-  function setBonusInvite(
-    bytes32 _key,
-    bytes32 _cid,
-    AdvancedInvite calldata _advancedInvite,
-    BonusDiscount[] calldata _bonusDiscount
-  ) external _onlyOwner {
-    setBonusDiscounts(_key, _bonusDiscount);
-    setAdvancedInvite(_key, _cid, _advancedInvite);
-  }
 
   function setInvite(
     bytes32 _key,
@@ -505,6 +489,9 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
       revert InvalidSeed();
     }
 
+    // Get current owner for minting tokens to
+    address currentOwner = seedHashOwner[seedHash];
+
     uint256 combinedSeed = uint256(keccak256(abi.encodePacked(seed, mintInfo.blockNumber)));
 
     uint16[] memory tokenIds;
@@ -517,12 +504,102 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
 
     for (uint256 j = 0; j < tokenIds.length; j++) {
       bytes memory _data;
-      _mint(mintInfo.to, tokenIds[j], 1, _data);
+      _mint(currentOwner, tokenIds[j], 1, _data);
     }
 
     emit FulfillRandomness(seedHash, seed, combinedSeed);
     seedHashMintInfo[seedHash].quantity = 0;
     seedHashMintInfo[seedHash].key = FULFILLED_KEY;
+  }
+
+  //
+  // UNREVEALED TOKEN TRADING
+  //
+
+  function listUnrevealedToken(uint256 seedHash, uint256 price) external {
+    if (seedHashOwner[seedHash] != _msgSender()) {
+      revert NotTokenOwner();
+    }
+
+    MintInfo memory mintInfo = seedHashMintInfo[seedHash];
+    if (mintInfo.quantity == 0 || mintInfo.key == FULFILLED_KEY) {
+      revert TokenAlreadyRevealed();
+    }
+
+    if (price == 0) {
+      revert PriceTooLow();
+    }
+    
+    // Check if this hash was already listed with a different price
+    if (seedHashPrice[seedHash] > 0) {
+        // If it's already in the list, remove it first
+        lowestPriceHash = ArchetypeLogicErc1155Random.removeFromPriceList(seedHash, nextLowestHash, seedHashPrice, lowestPriceHash);
+    }
+    
+    // Set the new price
+    lowestPriceHash = ArchetypeLogicErc1155Random.insertIntoPriceList(seedHash, price, nextLowestHash, seedHashPrice, lowestPriceHash);
+    
+    emit UnrevealedTokenListed(seedHash, price);
+  }
+
+  function delistUnrevealedToken(uint256 seedHash) external {
+    if (seedHashOwner[seedHash] != _msgSender()) {
+      revert NotTokenOwner();
+    }
+    
+    lowestPriceHash = ArchetypeLogicErc1155Random.removeFromPriceList(seedHash, nextLowestHash, seedHashPrice, lowestPriceHash);
+    
+    emit UnrevealedTokenDelisted(seedHash);
+  }
+
+  function buyLowestPricedUnrevealedToken() external payable {
+    uint256 seedHash;
+    address seller;
+    uint256 price;
+    
+    (seedHash, seller, price) = ArchetypeLogicErc1155Random.findLowestPricedToken(
+        nextLowestHash,
+        seedHashPrice,
+        seedHashOwner,
+        seedHashMintInfo,
+        lowestPriceHash
+    );
+    
+    if (msg.value < price) {
+        revert InsufficientEthSent();
+    }
+    
+    lowestPriceHash = ArchetypeLogicErc1155Random.processPurchase(
+        seedHash,
+        seller,
+        price,
+        payoutConfig,
+        nextLowestHash,
+        seedHashPrice,
+        seedHashOwner,
+        lowestPriceHash
+    );
+    
+    if (msg.value > price) {
+        _refund(_msgSender(), msg.value - price);
+    }
+    
+    emit UnrevealedTokenSold(seedHash, seller, _msgSender(), price);
+  }
+
+  function getAvailableUnrevealedTokens(uint256 count) external view returns (
+    uint256[] memory tokenHashes, 
+    uint256[] memory prices, 
+    address[] memory sellers
+  ) {
+    return ArchetypeLogicErc1155Random.getAvailableUnrevealedTokens(
+        count,
+        nextLowestHash,
+        seedHashPrice,
+        seedHashOwner,
+        seedHashMintInfo,
+        lowestPriceHash
+    );
   }
 
   //
