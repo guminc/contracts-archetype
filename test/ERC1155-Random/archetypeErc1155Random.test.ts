@@ -3588,6 +3588,8 @@ describe("FactoryErc1155Random", function () {
 
     await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice * BigInt(2));
 
+    await factory.connect(platform).setDeployFee(0)
+
   });
 
   it("test unrevealed token listing, delisting and buying", async function () {
@@ -3842,13 +3844,13 @@ describe("FactoryErc1155Random", function () {
     expect(await nft.lowestPriceHash()).to.equal(seedHash3);
   
     // Test with count = 0
-    const [emptyTokens, emptyPrices, emptySellers] = await nft.getAvailableTokens(0);
+    const [emptyTokens, emptyPrices, emptySellers] = await nft.getAvailableUnrevealedTokens(0);
     expect(emptyTokens.length).to.equal(0);
     expect(emptyPrices.length).to.equal(0);
     expect(emptySellers.length).to.equal(0);
   
     // Test with count = 2
-    const [twoTokens, twoPrices, twoSellers] = await nft.getAvailableTokens(2);
+    const [twoTokens, twoPrices, twoSellers] = await nft.getAvailableUnrevealedTokens(2);
     expect(twoTokens.length).to.equal(2);
     expect(twoPrices.length).to.equal(2);
     expect(twoSellers.length).to.equal(2);
@@ -3863,7 +3865,7 @@ describe("FactoryErc1155Random", function () {
     expect(twoSellers[1]).to.equal(accountZero.address);
   
     // Test with count = 10 (more than available, should return all 5 listed tokens)
-    const [allTokens, allPrices, allSellers] = await nft.getAvailableTokens(10);
+    const [allTokens, allPrices, allSellers] = await nft.getAvailableUnrevealedTokens(10);
     expect(allTokens.length).to.equal(5);
     expect(allPrices.length).to.equal(5);
     expect(allSellers.length).to.equal(5);
