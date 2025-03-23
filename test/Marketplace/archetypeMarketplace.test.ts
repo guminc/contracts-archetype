@@ -353,22 +353,6 @@ describe("Additional ArchetypeMarketplace Tests", function () {
       ).to.be.revertedWithCustomError(marketplace, "NotPlatform");
     });
     
-    it("should prevent non-platform address from changing fee recipient", async function () {
-      await expect(
-        marketplace.connect(seller).setFeeRecipient(buyer.address)
-      ).to.be.revertedWithCustomError(marketplace, "NotPlatform");
-      
-      await expect(
-        marketplace.connect(owner).setFeeRecipient(buyer.address)
-      ).to.be.revertedWithCustomError(marketplace, "NotPlatform");
-    });
-    
-    it("should prevent setting fee recipient to zero address", async function () {
-      await expect(
-        marketplace.connect(platform).setFeeRecipient(ethers.ZeroAddress)
-      ).to.be.revertedWithCustomError(marketplace, "ZeroAddress");
-    });
-    
     it("should prevent listing a token with zero price", async function () {
       await expect(
         marketplace.connect(seller).listItem(

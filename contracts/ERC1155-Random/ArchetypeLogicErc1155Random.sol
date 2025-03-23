@@ -619,7 +619,7 @@ library ArchetypeLogicErc1155Random {
   }
 
 
-  function payPlatform(uint256 fee) public {
+  function payPlatform(uint256 fee) internal {
     address[] memory recipients = new address[](1);
     recipients[0] = PLATFORM;
     uint16[] memory splits = new uint16[](1);

@@ -65,7 +65,6 @@ contract ArchetypeMarketplace {
 
     // State variables
     uint256 public feePercentage;
-    address public feeRecipient;
     
     uint256 public totalListings;
     mapping(uint256 => Listing) public listings;
@@ -84,10 +83,8 @@ contract ArchetypeMarketplace {
     event ListingCanceled(uint256 indexed listingId);
     event TokenSold(uint256 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
     event FeeUpdated(uint256 newFeePercentage);
-    event FeeRecipientUpdated(address newFeeRecipient);
 
     constructor() {
-        feeRecipient = PLATFORM;
         feePercentage = 250; // 2.5% (in basis points)
     }
 
@@ -246,12 +243,6 @@ contract ArchetypeMarketplace {
         feePercentage = _feePercentage;
         emit FeeUpdated(_feePercentage);
     }
-    
-    function setFeeRecipient(address _feeRecipient) external _onlyPlatform {
-        if (_feeRecipient == address(0)) revert ZeroAddress();
-        feeRecipient = _feeRecipient;
-        emit FeeRecipientUpdated(_feeRecipient);
-    }
 
     /**
      * @dev Verify the seller still owns the token
@@ -330,7 +321,7 @@ contract ArchetypeMarketplace {
         (bool sellerTransferSuccess, ) = payable(listing.seller).call{value: sellerAmount}("");
         if (!sellerTransferSuccess) revert TransferFailed();
         
-        (bool feeTransferSuccess, ) = payable(feeRecipient).call{value: fee}("");
+        (bool feeTransferSuccess, ) = payable(PLATFORM).call{value: fee}("");
         if (!feeTransferSuccess) revert TransferFailed();
         
         if (msg.value > listing.price) {
