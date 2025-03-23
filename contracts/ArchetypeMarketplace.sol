@@ -45,14 +45,11 @@ contract ArchetypeMarketplace {
     bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
     uint256 private constant FEE_DENOMINATOR = 10000;
 
-    address constant PLATFORM = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
+    address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
     address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
-    address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
-    
-    // Token type enum
-    enum TokenType { ERC721, ERC1155 }
-    
+        
     // Listing structure
+    enum TokenType { ERC721, ERC1155 }
     struct Listing {
         address tokenAddress;
         TokenType tokenType;
@@ -64,7 +61,7 @@ contract ArchetypeMarketplace {
     }
 
     // State variables
-    uint256 public feePercentage;
+    uint256 public feePercentage = 250; // 2.5% (in basis points);
     
     uint256 public totalListings;
     mapping(uint256 => Listing) public listings;
@@ -84,9 +81,7 @@ contract ArchetypeMarketplace {
     event TokenSold(uint256 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
     event FeeUpdated(uint256 newFeePercentage);
 
-    constructor() {
-        feePercentage = 250; // 2.5% (in basis points)
-    }
+    constructor() {}
 
     /**
      * @dev List an NFT for sale
