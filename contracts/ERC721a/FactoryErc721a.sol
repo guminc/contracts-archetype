@@ -51,12 +51,11 @@ contract FactoryErc721a is Ownable {
     token.transferOwnership(_receiver);
     
     if (deployFee > 0) {
-      address payouts = PAYOUTS;
       address[] memory recipients = new address[](1);
       recipients[0] = PLATFORM;
       uint16[] memory splits = new uint16[](1);
       splits[0] = 10000;
-      ArchetypePayouts(payouts).updateBalances{value: deployFee}(
+      ArchetypePayouts(PAYOUTS).updateBalances{value: deployFee}(
         deployFee,
         address(0), // native token
         recipients,
