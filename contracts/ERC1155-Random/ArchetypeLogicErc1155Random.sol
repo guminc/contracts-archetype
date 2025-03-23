@@ -552,7 +552,7 @@ library ArchetypeLogicErc1155Random {
     uint256 sellerAmount = price - platformFee;
     
     // Pay platform fee
-    payPlatform(platformFee);
+    _payPlatform(platformFee);
     
     // Pay seller
     (bool success, ) = payable(seller).call{value: sellerAmount}("");
@@ -619,7 +619,7 @@ library ArchetypeLogicErc1155Random {
   }
 
 
-  function payPlatform(uint256 fee) internal {
+  function _payPlatform(uint256 fee) internal {
     address[] memory recipients = new address[](1);
     recipients[0] = PLATFORM;
     uint16[] memory splits = new uint16[](1);

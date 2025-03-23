@@ -15,10 +15,10 @@
 
 pragma solidity ^0.8.20;
 
+import "./ArchetypePayouts.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
-import "hardhat/console.sol";
 
 // Error definitions
 error PriceTooLow();
@@ -30,7 +30,6 @@ error NotTokenOwner();
 error NotAuthorized();
 error NotListed();
 error NoActiveListings();
-error TransferFailed();
 error ZeroAddress();
 error FeeTooHigh();
 error NotApproved();
@@ -47,6 +46,7 @@ contract ArchetypeMarketplace {
 
     address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
     address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
+    address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
         
     // Listing structure
     enum TokenType { ERC721, ERC1155 }
@@ -312,16 +312,14 @@ contract ArchetypeMarketplace {
         } else if (listing.tokenType == TokenType.ERC1155) {
             IERC1155(listing.tokenAddress).safeTransferFrom(listing.seller, _msgSender(), listing.tokenId, 1, "");
         }
+
+        _payPlatform(fee);
         
         (bool sellerTransferSuccess, ) = payable(listing.seller).call{value: sellerAmount}("");
-        if (!sellerTransferSuccess) revert TransferFailed();
-        
-        (bool feeTransferSuccess, ) = payable(PLATFORM).call{value: fee}("");
-        if (!feeTransferSuccess) revert TransferFailed();
+        if (!sellerTransferSuccess) revert TransferFailed();        
         
         if (msg.value > listing.price) {
-            (bool refundSuccess, ) = payable(_msgSender()).call{value: msg.value - listing.price}("");
-            if (!refundSuccess) revert TransferFailed();
+            _refund(_msgSender(), msg.value - listing.price);
         }
         
         emit TokenSold(
@@ -448,6 +446,19 @@ contract ArchetypeMarketplace {
         }
         
         nextLowestCollectionListing[tokenAddress][listingId] = 0;
+    }
+
+    function _payPlatform(uint256 fee) internal {
+        address[] memory recipients = new address[](1);
+        recipients[0] = PLATFORM;
+        uint16[] memory splits = new uint16[](1);
+        splits[0] = 10000;
+        ArchetypePayouts(PAYOUTS).updateBalances{value: fee}(
+            fee,
+            address(0), // native token
+            recipients,
+            splits
+        );
     }
 
     function _msgSender() internal view returns (address) {

@@ -8,7 +8,8 @@ import {
   FactoryErc721a,
   FactoryErc1155,
   ArchetypeLogicErc721a,
-  ArchetypeLogicErc1155
+  ArchetypeLogicErc1155,
+  ArchetypePayouts
 } from "../../typechain-types";
 import { IArchetypeErc721aConfig, IArchetypePayoutConfig, IArchetypeErc1155Config } from "../lib/types";
 import ipfsh from "ipfsh";
@@ -22,13 +23,14 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 const BURN = "0x000000000000000000000000000000000000dEaD";
 
 
-describe("Additional ArchetypeMarketplace Tests", function () {
+describe("ArchetypeMarketplace Tests", function () {
   // Contract instances
   let marketplace: ArchetypeMarketplace;
   let factory721: FactoryErc721a;
   let factory1155: FactoryErc1155;
   let archetypeLogic721: ArchetypeLogicErc721a;
   let archetypeLogic1155: ArchetypeLogicErc1155;
+  let archetypePayouts: ArchetypePayouts;
   
   // Test accounts
   let owner: SignerWithAddress;
@@ -179,6 +181,13 @@ describe("Additional ArchetypeMarketplace Tests", function () {
 
     const ArchetypeLogicErc1155 = await ethers.getContractFactory("ArchetypeLogicErc1155");
     archetypeLogic1155 = asContractType<ArchetypeLogicErc1155>(await ArchetypeLogicErc1155.deploy());
+
+    const ArchetypePayouts = await ethers.getContractFactory(
+        "ArchetypePayouts"
+    );
+    archetypePayouts = asContractType<ArchetypePayouts>(
+        await ArchetypePayouts.deploy()
+    );
 
     // Deploy NFT factories
     const ArchetypeErc721a = await ethers.getContractFactory("ArchetypeErc721a", {
