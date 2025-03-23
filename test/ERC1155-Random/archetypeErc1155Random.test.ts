@@ -3759,7 +3759,7 @@ describe("FactoryErc1155Random", function () {
     expect(await nft.seedHashOwner(seedHash5)).to.equal(buyer.address);
   });
 
-  it("test getAvailableTokens for unrevealed tokens", async function () {
+  it("test getAvailableUnrevealedTokens for unrevealed tokens", async function () {
     const [accountZero, accountOne, accountTwo, accountThree] = await ethers.getSigners();
   
     const owner = accountOne;
@@ -3894,7 +3894,7 @@ describe("FactoryErc1155Random", function () {
     // Test that revealed tokens are not included
     await nft.connect(accountZero).fulfillRandomMint(seed3, signature3);
   
-    const [afterRevealTokens, afterRevealPrices, afterRevealSellers] = await nft.getAvailableTokens(10);
+    const [afterRevealTokens, afterRevealPrices, afterRevealSellers] = await nft.getAvailableUnrevealedTokens(10);
     expect(afterRevealTokens.length).to.equal(4); // One less than before
     expect(afterRevealPrices.length).to.equal(4);
     expect(afterRevealSellers.length).to.equal(4);
@@ -3911,7 +3911,7 @@ describe("FactoryErc1155Random", function () {
     // Test after delisting a token
     await nft.connect(accountZero).delistUnrevealedToken(seedHash2);
     
-    const [afterDelistTokens, afterDelistPrices, afterDelistSellers] = await nft.getAvailableTokens(10);
+    const [afterDelistTokens, afterDelistPrices, afterDelistSellers] = await nft.getAvailableUnrevealedTokens(10);
     expect(afterDelistTokens.length).to.equal(3); // One less than before
     expect(afterDelistPrices.length).to.equal(3);
     expect(afterDelistSellers.length).to.equal(3);
