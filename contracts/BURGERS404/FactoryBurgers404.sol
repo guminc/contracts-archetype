@@ -79,17 +79,10 @@ contract FactoryBurgers404 is Ownable {
     archetype = archetype_;
   }
   
-  function setDeployFee(uint256 newFee) public _onlyPlatform {
+  function setDeployFee(uint256 newFee) public onlyOwner {
     uint256 oldFee = deployFee;
     deployFee = newFee;
     emit DeployFeeChanged(oldFee, newFee);
-  }
-  
-  modifier _onlyPlatform() {
-    if (msg.sender != PLATFORM) {
-      revert NotPlatform();
-    }
-    _;
   }
 
   function _refund(address to, uint256 refund) internal {
