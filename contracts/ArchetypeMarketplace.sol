@@ -216,6 +216,7 @@ contract ArchetypeMarketplace {
     function getAvailableCollectionListings(address tokenAddress, uint256 count) external view returns (
         uint256[] memory listingIds,
         uint256[] memory prices,
+        uint256[] memory tokenIds,
         address[] memory sellers
     ) {
         return _getAvailableListingsFromLinkedList(
@@ -333,7 +334,7 @@ contract ArchetypeMarketplace {
     }
     
     /**
-     * @dev Find the first active and valid listing in a linked list
+     * @dev Find the first active and valid listing in pricing list
      */
     function _findFirstActiveAndValidListing(
         uint256 startListingId, 
@@ -354,7 +355,7 @@ contract ArchetypeMarketplace {
     }
     
     /**
-     * @dev Get available listings from a linked list
+     * @dev Get available listings from pricing list
      */
     function _getAvailableListingsFromLinkedList(
         uint256 count,
@@ -363,10 +364,12 @@ contract ArchetypeMarketplace {
     ) internal view returns (
         uint256[] memory listingIds,
         uint256[] memory prices,
+        uint256[] memory tokenIds,
         address[] memory sellers
     ) {
         listingIds = new uint256[](count);
         prices = new uint256[](count);
+        tokenIds = new uint256[](count);
         sellers = new address[](count);
         
         uint256 foundCount = 0;
@@ -377,6 +380,7 @@ contract ArchetypeMarketplace {
             if (listing.active && _verifyOwnership(listing) && _verifyApproval(listing)) {
                 listingIds[foundCount] = currentListingId;
                 prices[foundCount] = listing.price;
+                tokenIds[foundCount] = listing.tokenId;
                 sellers[foundCount] = listing.seller;
                 foundCount++;
             }
@@ -387,22 +391,24 @@ contract ArchetypeMarketplace {
         if (foundCount < count) {
             uint256[] memory resizedListingIds = new uint256[](foundCount);
             uint256[] memory resizedPrices = new uint256[](foundCount);
+            uint256[] memory resizedTokenIds = new uint256[](foundCount);
             address[] memory resizedSellers = new address[](foundCount);
             
             for (uint256 i = 0; i < foundCount; i++) {
                 resizedListingIds[i] = listingIds[i];
                 resizedPrices[i] = prices[i];
+                resizedTokenIds[i] = tokenIds[i];
                 resizedSellers[i] = sellers[i];
             }
             
-            return (resizedListingIds, resizedPrices, resizedSellers);
+            return (resizedListingIds, resizedPrices, resizedTokenIds, resizedSellers);
         }
         
-        return (listingIds, prices, sellers);
+        return (listingIds, prices, tokenIds, sellers);
     }
 
     /**
-     * @dev Insert a listing into a price-ordered linked list
+     * @dev Insert a listing into pricing list
      */
     function _insertIntoCollectionPriceList(uint256 listingId, address tokenAddress) internal {
         uint256 price = listings[listingId].price;
@@ -427,7 +433,7 @@ contract ArchetypeMarketplace {
     }
     
     /**
-     * @dev Remove a listing from a price-ordered linked list
+     * @dev Remove a listing from pricing list
      */
     function _removeFromCollectionPriceList(uint256 listingId, address tokenAddress) internal {
         if (listingId == collectionLowestPriceListingId[tokenAddress]) {
