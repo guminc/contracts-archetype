@@ -19,9 +19,14 @@ import "./ArchetypeErc721a.sol";
 import "./ArchetypeLogicErc721a.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+error InsufficientDeployFee();
+
 contract FactoryZksyncErc721a is Ownable {
   event CollectionAdded(address indexed sender, address indexed receiver, address collection);
+  event DeployFeeChanged(uint256 oldFee, uint256 newFee);
+
   address public archetype;
+  uint256 public deployFee;
 
   constructor(address archetype_) {
     archetype = archetype_;
@@ -34,14 +39,33 @@ contract FactoryZksyncErc721a is Ownable {
     Config calldata config,
     PayoutConfig calldata payoutConfig
   ) external payable returns (address) {
-
+    if (msg.value < deployFee) {
+      revert InsufficientDeployFee();
+    }
+    
     ArchetypeErc721a token = new ArchetypeErc721a();
     token.initialize(name, symbol, config, payoutConfig, _receiver);
-
     token.transferOwnership(_receiver);
-    if (msg.value > 0) {
-      (bool sent, ) = payable(_receiver).call{ value: msg.value }("");
-      require(sent, "1");
+    
+    if (deployFee > 0) {
+      address[] memory recipients = new address[](1);
+      recipients[0] = PLATFORM;
+      uint16[] memory splits = new uint16[](1);
+      splits[0] = 10000;
+      ArchetypePayouts(PAYOUTS).updateBalances{value: deployFee}(
+        deployFee,
+        address(0), // native token
+        recipients,
+        splits
+      );
+      
+      // Forward any excess payment to the receiver
+      uint256 excess = msg.value - deployFee;
+      if (excess > 0) {
+        _refund(_receiver, excess);
+      }
+    } else if (msg.value > 0) {
+      _refund(_receiver, msg.value);
     }
     emit CollectionAdded(_msgSender(), _receiver, address(token));
     return address(token);
@@ -49,5 +73,18 @@ contract FactoryZksyncErc721a is Ownable {
 
   function setArchetype(address archetype_) public onlyOwner {
     archetype = archetype_;
+  }
+  
+  function setDeployFee(uint256 newFee) public onlyOwner {
+    uint256 oldFee = deployFee;
+    deployFee = newFee;
+    emit DeployFeeChanged(oldFee, newFee);
+  }
+
+  function _refund(address to, uint256 refund) internal {
+    (bool success, ) = payable(to).call{ value: refund }("");
+    if (!success) {
+      revert TransferFailed();
+    }
   }
 }
