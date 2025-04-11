@@ -238,17 +238,13 @@ abstract contract ArchetypeLogicErc721a {
     }
 
     if (!i.isBlacklist) {
-      if (!verify(auth, i.tokenAddress, effectiveEoa)) {
-        // check msgSender as well for agw
-        if (!verify(auth, i.tokenAddress, msgSender)) {
-          revert WalletUnauthorizedToMint();
-        }
+      // check both msgSender and effective eoa for agw
+      if (!verify(auth, i.tokenAddress, effectiveEoa) && !verify(auth, i.tokenAddress, msgSender)) {
+        revert WalletUnauthorizedToMint();
       }
     } else {
-      if (verify(auth, i.tokenAddress, effectiveEoa)) {
-        if (msgSender != effectiveEoa && verify(auth, i.tokenAddress, msgSender)) {
+      if (verify(auth, i.tokenAddress, effectiveEoa) || verify(auth, i.tokenAddress, msgSender)) {
           revert Blacklisted();
-        }
       }
     }
 
