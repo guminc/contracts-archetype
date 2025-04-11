@@ -193,6 +193,9 @@ contract ArchetypeErc721a is
     address effectiveEoa = getEffectiveEoaWallet(msgSender);
     if (invite.limit < invite.maxSupply) {
       _minted[effectiveEoa][auth.key] += totalQuantity;
+      if(msgSender != effectiveEoa) {
+        _minted[msgSender][auth.key] += totalQuantity;
+      }
     }
     if (invite.maxSupply < UINT32_MAX) {
       _listSupply[auth.key] += totalQuantity;
@@ -239,6 +242,9 @@ contract ArchetypeErc721a is
     address effectiveEoa = getEffectiveEoaWallet(msgSender);
     if (burnInvite.limit < config.maxSupply) {
       _minted[effectiveEoa][keccak256(abi.encodePacked("burn", auth.key))] += quantity;
+      if(msgSender != effectiveEoa) {
+        _minted[msgSender][keccak256(abi.encodePacked("burn", auth.key))] += quantity;
+      }
     }
 
     updateBalances(
