@@ -244,7 +244,7 @@ abstract contract ArchetypeLogicErc721a {
       }
     } else {
       if (verify(auth, i.tokenAddress, effectiveEoa) || verify(auth, i.tokenAddress, msgSender)) {
-          revert Blacklisted();
+        revert Blacklisted();
       }
     }
 
