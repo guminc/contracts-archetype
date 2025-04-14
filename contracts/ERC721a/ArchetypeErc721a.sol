@@ -24,19 +24,13 @@ import "solady/src/utils/LibString.sol";
 import "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
 contract ArchetypeErc721a is
+  ArchetypeLogicErc721a,
   ERC721A__Initializable,
   ERC721AUpgradeable,
   ERC721A__OwnableUpgradeable,
   ERC2981Upgradeable,
   ERC721AQueryableUpgradeable
 {
-  //
-  // EVENTS
-  //
-  event Invited(bytes32 indexed key, bytes32 indexed cid);
-  event BurnInvited(bytes32 indexed key, bytes32 indexed cid);
-  event Referral(address indexed affiliate, address token, uint128 wad, uint256 numMints);
-  event Withdrawal(address indexed src, address token, uint128 wad);
 
   //
   // VARIABLES
@@ -126,7 +120,7 @@ contract ArchetypeErc721a is
         quantityToAdd = quantityList[i];
       }
 
-      uint256 numBonusMints = ArchetypeLogicErc721a.bonusMintsAwarded(quantityToAdd, packedDiscount);
+      uint256 numBonusMints = bonusMintsAwarded(quantityToAdd, packedDiscount);
       _mint(toList[i], quantityToAdd + numBonusMints);
 
       totalQuantity += quantityToAdd;
@@ -156,7 +150,7 @@ contract ArchetypeErc721a is
 
     uint256 curSupply = _totalMinted();
 
-    uint256 numBonusMints = ArchetypeLogicErc721a.bonusMintsAwarded(quantity, packedDiscount);
+    uint256 numBonusMints = bonusMintsAwarded(quantity, packedDiscount);
     _mint(to, quantity + numBonusMints);
 
     validateAndCreditMint(invite, auth, quantity, numBonusMints, curSupply, affiliate, signature);
@@ -184,7 +178,7 @@ contract ArchetypeErc721a is
     }
 
     uint128 cost = uint128(
-      ArchetypeLogicErc721a.computePrice(
+      computePrice(
         invite,
         config.affiliateDiscount,
         quantity,
@@ -193,16 +187,17 @@ contract ArchetypeErc721a is
       )
     );
 
-    ArchetypeLogicErc721a.validateMint(invite, config, auth, _minted, signature, args, cost);
+    validateMint(invite, config, auth, _minted, signature, args, cost);
 
+    address msgSender = _msgSender();
     if (invite.limit < invite.maxSupply) {
-      _minted[_msgSender()][auth.key] += totalQuantity;
+      _minted[msgSender][auth.key] += totalQuantity;
     }
     if (invite.maxSupply < UINT32_MAX) {
       _listSupply[auth.key] += totalQuantity;
     }
 
-    ArchetypeLogicErc721a.updateBalances(
+    updateBalances(
       invite.tokenAddress,
       config,
       _ownerBalance,
@@ -213,7 +208,7 @@ contract ArchetypeErc721a is
     );
 
     if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
+      _refund(msgSender, msg.value - cost);
     }
   }
 
@@ -222,7 +217,7 @@ contract ArchetypeErc721a is
 
     uint256 curSupply = _totalMinted();
     uint128 cost = burnInvite.price;
-    ArchetypeLogicErc721a.validateBurnToMint(burnInvite, config, auth, tokenIds, curSupply, _minted, cost);
+    validateBurnToMint(burnInvite, config, auth, tokenIds, curSupply, _minted, cost);
 
     address msgSender = _msgSender();
     for (uint256 i; i < tokenIds.length; ) {
@@ -244,7 +239,7 @@ contract ArchetypeErc721a is
       _minted[msgSender][keccak256(abi.encodePacked("burn", auth.key))] += quantity;
     }
 
-    ArchetypeLogicErc721a.updateBalances(
+    updateBalances(
       burnInvite.tokenAddress,
       config,
       _ownerBalance,
@@ -255,7 +250,7 @@ contract ArchetypeErc721a is
     );
 
     if (msg.value > cost) {
-      _refund(_msgSender(), msg.value - cost);
+      _refund(msgSender, msg.value - cost);
     }
   }
 
@@ -275,7 +270,7 @@ contract ArchetypeErc721a is
   }
 
   function withdrawTokens(address[] memory tokens) public {
-    ArchetypeLogicErc721a.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
+    withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
   }
 
   function withdrawAffiliate() external {
@@ -285,7 +280,7 @@ contract ArchetypeErc721a is
   }
 
   function withdrawTokensAffiliate(address[] memory tokens) public {
-    ArchetypeLogicErc721a.withdrawTokensAffiliate(_affiliateBalance, tokens);
+    withdrawTokensAffiliate(_affiliateBalance, tokens);
   }
 
   function ownerBalance() external view returns (uint128) {
@@ -323,7 +318,7 @@ contract ArchetypeErc721a is
   ) external view returns (uint256) {
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicErc721a.computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
+    return computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
   }
 
   //
@@ -505,9 +500,6 @@ contract ArchetypeErc721a is
     return 1;
   }
 
-  function _msgSender() internal view returns (address) {
-    return msg.sender == BATCH ? tx.origin : msg.sender;
-  }
 
   modifier _onlyPlatform() {
     if (_msgSender() != PLATFORM) {

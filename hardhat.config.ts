@@ -6,6 +6,7 @@ import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@matterlabs/hardhat-zksync";
 import "@matterlabs/hardhat-zksync-deploy";
+import "@matterlabs/hardhat-zksync-node";
 import "hardhat-gas-reporter";
 require("hardhat-contract-sizer");
 
@@ -25,7 +26,7 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
-      zksync: false, //true,
+      zksync: true, //true,
     },
     sepolia: {
       accounts: [privateKey],
@@ -105,35 +106,33 @@ const config: HardhatUserConfig = {
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
-      verifyURL:
+      verifyURL: 
         "https://api-explorer-verify.testnet.abs.xyz/contract_verification",
       chainId: 11124,
       ethNetwork: "sepolia",
       zksync: true,
     },
+    abstract_mainnet: {
+      accounts: [privateKey],
+      url: "https://api.mainnet.abs.xyz/",
+      // verifyURL: "https://api.abscan.org/api",
+
+      // verifyURL:
+      //   "https://api-explorer-verify.mainnet.abs.xyz/contract_verification",
+      chainId: 2741,
+      ethNetwork: "mainnet",
+      zksync: true,
+    },
   },
   zksolc: {
-    version: "latest",
+    version: "1.5.7",
     settings: {
       // find all available options in the official documentation
       // https://docs.zksync.io/build/tooling/hardhat/hardhat-zksync-solc#configuration
-      libraries: {
-        "contracts/ERC721a/ArchetypeLogicErc721a.sol": {
-          ArchetypeLogicErc721a: "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
-        },
-        "contracts/ERC1155-Random/ArchetypeLogicErc1155Random.sol": {
-          ArchetypeLogicErc1155Random:
-            "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
-        },
-        "contracts/BURGERS404/ArchetypeLogicBurgers404.sol": {
-          ArchetypeLogicBurgers404:
-            "0x9Ddc454ca1169CEf98D5D8572B02994b66e53CEe", // update
-        },
-      },
-    },
+    }
   },
   solidity: {
-    version: "0.8.20",
+    version: "0.8.28",
     settings: {
       optimizer: {
         enabled: true,
@@ -152,6 +151,7 @@ const config: HardhatUserConfig = {
       blast_mainnet: process.env.BLASTSCAN_API_KEY || "",
       arbitrum_mainnet: process.env.ARBSCAN_API_KEY || "",
       polygon_mainnet: process.env.POLYSCAN_API_KEY || "",
+      abstract_mainnet: process.env.ABSSCAN_API_KEY || "",
       sanko_mainnet: "abc",
       berachain_bartio: "abc",
       soneium_minato: "abc",
@@ -235,6 +235,22 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://explorer.superposition.so/api",
           browserURL: "https://explorer.superposition.so",
+        }
+      },
+      {
+        network: "abstract_testnet",
+        chainId: 11124,
+        urls: {
+          apiURL: "https://api-sepolia.abscan.org/api",
+          browserURL: "https://sepolia.abscan.org/",
+        },
+      },
+      {
+        network: "abstract_mainnet",
+        chainId: 2741,
+        urls: {
+          apiURL: "https://api.abscan.org/api",
+          browserURL: "https://abscan.org/",
         },
       },
       {

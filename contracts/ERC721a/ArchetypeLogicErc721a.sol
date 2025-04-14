@@ -16,6 +16,7 @@
 pragma solidity ^0.8.20;
 
 import "../ArchetypePayouts.sol";
+import "../IExclusiveDelegateResolver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "solady/src/utils/MerkleProofLib.sol";
@@ -133,13 +134,13 @@ struct ValidationArgs {
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
-address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
-address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
-address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
+address constant PLATFORM = 0x16e3F90Ad00b5CDF005FB9f7D855F4611D6b2B72;
+address constant BATCH = 0x5D4A8C47ae56C02Bdb41D2E5D4957b7A0bE9c619;
+address constant PAYOUTS = 0x927a34917ab0ddFB37F05F56B302726d58f83A02;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 
-library ArchetypeLogicErc721a {
+abstract contract ArchetypeLogicErc721a {
   //
   // EVENTS
   //
@@ -148,6 +149,11 @@ library ArchetypeLogicErc721a {
   event Referral(address indexed affiliate, address token, uint128 wad, uint256 numMints);
   event Withdrawal(address indexed src, address token, uint128 wad);
 
+  // AGW
+  bytes24 constant _AGW_LINK_RIGHTS = bytes24(keccak256("AGW_LINK"));
+  IExclusiveDelegateResolver constant DELEGATE_RESOLVER =
+    IExclusiveDelegateResolver(0x0000000078CC4Cc1C14E27c0fa35ED6E5E58825D);
+
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
     AdvancedInvite storage invite,
@@ -155,7 +161,7 @@ library ArchetypeLogicErc721a {
     uint256 numTokens,
     uint256 listSupply,
     bool affiliateUsed
-  ) public view returns (uint256) {
+  ) internal view returns (uint256) {
     uint256 price = invite.price;
     uint256 cost;
     if (invite.interval > 0 && invite.delta > 0) {
@@ -215,7 +221,7 @@ library ArchetypeLogicErc721a {
     bytes calldata signature,
     ValidationArgs memory args,
     uint128 cost
-  ) public view {
+  ) internal view {
     address msgSender = _msgSender();
     if (args.affiliate != address(0)) {
       if (
@@ -299,7 +305,7 @@ library ArchetypeLogicErc721a {
     uint256 curSupply,
     mapping(address => mapping(bytes32 => uint256)) storage minted,
     uint128 cost
-  ) public view {
+  ) internal view {
     if (burnInvite.limit == 0) {
       revert MintingPaused();
     }
@@ -386,7 +392,7 @@ library ArchetypeLogicErc721a {
     address affiliate,
     uint256 quantity,
     uint128 value
-  ) public {
+  ) internal {
     uint128 affiliateWad;
     if (affiliate != address(0)) {
       affiliateWad = (value * config.affiliateFee) / 10000;
@@ -409,8 +415,8 @@ library ArchetypeLogicErc721a {
 
   function withdrawTokensAffiliate(
     mapping(address => mapping(address => uint128)) storage _affiliateBalance,
-    address[] calldata tokens
-  ) public {
+    address[] memory tokens
+  ) internal {
     address msgSender = _msgSender();
 
     for (uint256 i; i < tokens.length; i++) {
@@ -444,8 +450,8 @@ library ArchetypeLogicErc721a {
     PayoutConfig storage payoutConfig,
     mapping(address => uint128) storage _ownerBalance,
     address owner,
-    address[] calldata tokens
-  ) public {
+    address[] memory tokens
+  ) internal {
     address msgSender = _msgSender();
     for (uint256 i; i < tokens.length; i++) {
       address tokenAddress = tokens[i];
@@ -537,7 +543,7 @@ library ArchetypeLogicErc721a {
     address affiliate,
     bytes calldata signature,
     address affiliateSigner
-  ) public view {
+  ) internal view {
     bytes32 signedMessagehash = ECDSA.toEthSignedMessageHash(
       keccak256(abi.encodePacked(affiliate))
     );
@@ -552,7 +558,7 @@ library ArchetypeLogicErc721a {
     Auth calldata auth,
     address tokenAddress,
     address account
-  ) public pure returns (bool) {
+  ) internal pure returns (bool) {
     // keys 0-255 and tokenAddress are public
     if (uint256(auth.key) <= 0xff || auth.key == keccak256(abi.encodePacked(tokenAddress))) {
       return true;
