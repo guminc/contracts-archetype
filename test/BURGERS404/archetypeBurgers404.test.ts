@@ -3122,7 +3122,7 @@ describe("Factory", function () {
   
       const deployPrice = ethers.parseEther('0.05')
   
-      await factory.connect(platform).setDeployFee(deployPrice)
+      await factory.connect(accountZero).setDeployFee(deployPrice)
   
       expect(await factory.deployFee()).to.equal(deployPrice)
   
