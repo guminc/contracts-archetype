@@ -102,6 +102,11 @@ const config: HardhatUserConfig = {
       url: "https://rpc-gel.inkonchain.com",
       chainId: 57073,
     },
+    mantle_mainnet: {
+      accounts: [privateKey],
+      url: "https://rpc.mantle.xyz",
+      chainId: 5000
+    },
     abstract_testnet: {
       accounts: [privateKey],
       url: "https://api.testnet.abs.xyz",
@@ -158,8 +163,8 @@ const config: HardhatUserConfig = {
       apechain_mainnet: "533JYG2IWFR2YA8RS7WR5NA9W8I79XATPU",
       soneium_mainnet: "abc",
       superposition: "abc",
-      ink_mainnet: "abc"
-
+      ink_mainnet: "abc",
+      mantle_mainnet: "abc"
     },
     customChains: [
       {
@@ -245,6 +250,14 @@ const config: HardhatUserConfig = {
           browserURL: "https://explorer.inkonchain.com",
         },
       },
+      {
+        network: "mantle_mainnet",
+        chainId: 5000,
+        urls: {
+          apiURL: "https://explorer.mantle.xyz/api",
+          browserURL: "https://explorer.mantle.xyz",
+        },
+    },
     ],
   },
 };

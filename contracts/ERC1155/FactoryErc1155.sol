@@ -15,14 +15,14 @@
 
 pragma solidity ^0.8.20;
 
-import "./ArchetypeErc1155Random.sol";
-import "./ArchetypeLogicErc1155Random.sol";
+import "./ArchetypeErc1155.sol";
+import "./ArchetypeLogicErc1155.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 error InsufficientDeployFee();
 
-contract FactoryErc1155Random is Ownable {
+contract FactoryErc1155 is Ownable {
   event CollectionAdded(address indexed sender, address indexed receiver, address collection);
   event DeployFeeChanged(uint256 oldFee, uint256 newFee);
   
@@ -46,7 +46,7 @@ contract FactoryErc1155Random is Ownable {
     
     bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender, block.chainid));
     address clone = Clones.cloneDeterministic(archetype, salt);
-    ArchetypeErc1155Random token = ArchetypeErc1155Random(clone);
+    ArchetypeErc1155 token = ArchetypeErc1155(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
     token.transferOwnership(_receiver);
     

@@ -20,6 +20,16 @@ export type IArchetypeBurgers404Config = {
   erc20Ratio: number;
 };
 
+export type IArchetypeErc1155Config = {
+  baseUri: string;
+  affiliateSigner: string;
+  maxSupply: number[];
+  maxBatchSize: number;
+  affiliateFee: number;
+  affiliateDiscount: number;
+  defaultRoyalty: number;
+};
+
 export type IArchetypeErc1155RandomConfig = {
   baseUri: string;
   affiliateSigner: string;

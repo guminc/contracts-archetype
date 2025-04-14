@@ -29,7 +29,6 @@ error ExcessiveEthSent();
 error Erc20BalanceTooLow();
 error MaxSupplyExceeded();
 error ListMaxSupplyExceeded();
-error TokenPoolEmpty();
 error NumberOfMintsExceeded();
 error MintingPaused();
 error InvalidReferral();
@@ -46,11 +45,7 @@ error LockedForever();
 error URIQueryForNonexistentToken();
 error InvalidTokenId();
 error MintToZeroAddress();
-error InvalidSeed();
-error SeedHashAlreadyExists();
-error NotListed();
-error TokenAlreadyRevealed();
-error PriceTooLow();
+error NotSupported();
 
 //
 // STRUCTS
@@ -63,13 +58,11 @@ struct Auth {
 struct Config {
   string baseUri;
   address affiliateSigner;
-  address fulfillmentSigner;
-  uint32 maxSupply;
+  uint32[] maxSupply; // max supply for each mintable tokenId
   uint16 maxBatchSize;
   uint16 affiliateFee; //BPS
   uint16 affiliateDiscount; //BPS
   uint16 defaultRoyalty; //BPS
-  uint16[] tokenPool; // flattened list of all mintable tokens
 }
 
 struct PayoutConfig {
@@ -85,10 +78,8 @@ struct PayoutConfig {
 struct Options {
   bool uriLocked;
   bool maxSupplyLocked;
-  bool tokenPoolLocked;
   bool affiliateFeeLocked;
   bool ownerAltPayoutLocked;
-  bool airdropLocked;
 }
 
 struct AdvancedInvite {
@@ -101,8 +92,8 @@ struct AdvancedInvite {
   uint32 maxSupply;
   uint32 interval;
   uint32 unitSize; // mint 1 get x
+  uint32[] tokenIds; // token ids mintable from this list
   address tokenAddress;
-  uint16[] tokenIdsExcluded; // token ids excluded from this list
 }
 
 struct Invite {
@@ -112,23 +103,17 @@ struct Invite {
   uint32 limit;
   uint32 maxSupply;
   uint32 unitSize; // mint 1 get x
+  uint32[] tokenIds; // token ids mintable from this list
   address tokenAddress;
-  uint16[] tokenIdsExcluded; // token ids excluded from this list
 }
 
 struct ValidationArgs {
   address owner;
   address affiliate;
-  uint256 quantity;
-  uint256 curSupply;
+  uint256[] quantities;
+  uint256[] tokenIds;
+  uint256 totalQuantity;
   uint256 listSupply;
-}
-
-struct MintInfo {
-  bytes32 key;
-  address to;
-  uint256 quantity;
-  uint256 blockNumber;
 }
 
 // UPDATE CONSTANTS BEFORE DEPLOY
@@ -138,15 +123,13 @@ address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
 uint16 constant MAXBPS = 5000; // max fee or discount is 50%
 uint32 constant UINT32_MAX = 2**32 - 1;
 
-library ArchetypeLogicErc1155Random {
+library ArchetypeLogicErc1155 {
   //
   // EVENTS
   //
   event Invited(bytes32 indexed key, bytes32 indexed cid);
   event Referral(address indexed affiliate, address token, uint128 wad, uint256 numMints);
   event Withdrawal(address indexed src, address token, uint128 wad);
-  event RequestRandomness(uint256 indexed seedHash);
-  event FulfillRandomness(uint256 indexed seedHash, uint256 seed, uint256 combinedSeed);
 
   // calculate price based on affiliate usage and mint discounts
   function computePrice(
@@ -195,6 +178,7 @@ library ArchetypeLogicErc1155Random {
     Config storage config,
     Auth calldata auth,
     mapping(address => mapping(bytes32 => uint256)) storage minted,
+    uint256[] storage tokenSupply,
     bytes calldata signature,
     ValidationArgs memory args,
     uint256 cost
@@ -225,10 +209,15 @@ library ArchetypeLogicErc1155Random {
       revert MintEnded();
     }
 
+    uint256 totalQuantity = 0;
+    for (uint256 j = 0; j < args.quantities.length; j++) {
+      totalQuantity += args.quantities[j];
+    }
+
     {
       uint256 totalAfterMint;
       if (i.limit < i.maxSupply) {
-        totalAfterMint = minted[msgSender][auth.key] + args.quantity;
+        totalAfterMint = minted[msgSender][auth.key] + totalQuantity;
 
         if (totalAfterMint > i.limit) {
           revert NumberOfMintsExceeded();
@@ -236,23 +225,40 @@ library ArchetypeLogicErc1155Random {
       }
 
       if (i.maxSupply < UINT32_MAX) {
-        totalAfterMint = args.listSupply + args.quantity;
+        totalAfterMint = args.listSupply + totalQuantity;
         if (totalAfterMint > i.maxSupply) {
           revert ListMaxSupplyExceeded();
         }
       }
     }
 
-    if (args.quantity > config.maxBatchSize) {
+    uint256[] memory checked = new uint256[](tokenSupply.length);
+    for (uint256 j = 0; j < args.tokenIds.length; j++) {
+      uint256 tokenId = args.tokenIds[j];
+      if (i.tokenIds.length != 0) {
+        bool isValid = false;
+        for (uint256 k = 0; k < i.tokenIds.length; k++) {
+          if (tokenId == i.tokenIds[k]) {
+            isValid = true;
+            break;
+          }
+        }
+        if (!isValid) {
+          revert InvalidTokenId();
+        }
+      }
+
+      if (
+        (tokenSupply[tokenId - 1] + checked[tokenId - 1] + args.quantities[j]) >
+        config.maxSupply[tokenId - 1]
+      ) {
+        revert MaxSupplyExceeded();
+      }
+      checked[tokenId - 1] += args.quantities[j];
+    }
+
+    if (totalQuantity > config.maxBatchSize) {
       revert MaxBatchSizeExceeded();
-    }
-
-    if ((args.curSupply + args.quantity) > config.maxSupply) {
-      revert MaxSupplyExceeded();
-    }
-
-    if (args.quantity > config.tokenPool.length) {
-      revert TokenPoolEmpty();
     }
 
     if (i.tokenAddress != address(0)) {
@@ -432,206 +438,6 @@ library ArchetypeLogicErc1155Random {
     }
   }
 
-  function removeFromPriceList(
-    uint256 seedHash,
-    mapping(uint256 => uint256) storage nextLowestHash,
-    mapping(uint256 => uint256) storage seedHashPrice,
-    uint256 lowestPriceHash
-  ) public returns (uint256) {
-    uint256 newLowestPriceHash = lowestPriceHash;
-    if (seedHash == lowestPriceHash) {
-        // It was the lowest price, update to next lowest
-        newLowestPriceHash =  nextLowestHash[seedHash];
-    } else {
-        // Find previous hash that points to this one
-        uint256 current = lowestPriceHash;
-        
-        while (current != 0 && nextLowestHash[current] != seedHash) {
-            current = nextLowestHash[current];
-        }
-        
-        if (current != 0) {
-            // Update the link to skip over the hash being removed
-            nextLowestHash[current] = nextLowestHash[seedHash];
-        }
-    }
-    
-    // Clear this hashed pointers
-    nextLowestHash[seedHash] = 0;
-    seedHashPrice[seedHash] = 0;
-
-    return newLowestPriceHash;
-  }
-
-  function insertIntoPriceList(
-    uint256 seedHash,
-    uint256 price,
-    mapping(uint256 => uint256) storage nextLowestHash,
-    mapping(uint256 => uint256) storage seedHashPrice,
-    uint256 lowestPriceHash
-  ) public returns (uint256) {
-    seedHashPrice[seedHash] = price;
-    uint256 newLowestPriceHash = lowestPriceHash;
-
-    uint256 lowestPrice = seedHashPrice[lowestPriceHash];
-    if (lowestPrice == 0 || price < lowestPrice) {
-        // New hash is the lowest price
-        nextLowestHash[seedHash] = lowestPriceHash;
-        newLowestPriceHash = seedHash;
-    } else {
-        // Find correct position to insert
-        uint256 current = lowestPriceHash;
-        uint256 next = nextLowestHash[current];
-        
-        while (next != 0 && seedHashPrice[next] <= price) {
-            current = next;
-            next = nextLowestHash[current];
-        }
-        
-        // Insert between current and next
-        nextLowestHash[seedHash] = next;
-        nextLowestHash[current] = seedHash;
-    }
-
-    return newLowestPriceHash;
-  }
-
-  function findLowestPricedToken(
-    mapping(uint256 => uint256) storage nextLowestHash,
-    mapping(uint256 => uint256) storage seedHashPrice,
-    mapping(uint256 => address) storage seedHashOwner,
-    mapping(uint256 => MintInfo) storage seedHashMintInfo,
-    uint256 lowestPriceHash
-  ) public view returns (uint256, address, uint256) {
-    // Start with the lowest price hash
-    uint256 seedHash = lowestPriceHash;
-    
-    // Loop through the list until we find a valid token
-    while (seedHash != 0) {
-        // Check if this token is valid (exists and is for sale)
-        if (seedHashPrice[seedHash] > 0 && seedHashOwner[seedHash] != address(0)) {
-            // Check if it hasn't been revealed yet
-            MintInfo memory mintInfo = seedHashMintInfo[seedHash];
-            if (mintInfo.quantity != 0 && mintInfo.key != bytes32("fulfilled")) {
-                // Found a valid token
-                return (seedHash, seedHashOwner[seedHash], seedHashPrice[seedHash]);
-            }
-        }
-        
-        // Move to the next token in the list
-        seedHash = nextLowestHash[seedHash];
-    }
-    
-    // If we've gone through the entire list without finding a valid token
-    revert NotListed();
-  }
-
-  function processPurchase(
-    uint256 seedHash,
-    address seller,
-    uint256 price,
-    PayoutConfig storage payoutConfig,
-    mapping(uint256 => uint256) storage nextLowestHash,
-    mapping(uint256 => uint256) storage seedHashPrice,
-    mapping(uint256 => address) storage seedHashOwner,
-    uint256 lowestPriceHash
-  ) public returns (uint256) {
-    // Update token state
-    seedHashPrice[seedHash] = 0;
-    seedHashOwner[seedHash] = _msgSender();
-    
-    // Update the lowest price hash if needed
-    uint256 newLowestPriceHash = lowestPriceHash;
-    if (seedHash == lowestPriceHash) {
-        // If we're buying the lowest priced token, the new lowest is the next one
-        newLowestPriceHash = nextLowestHash[seedHash];
-    }
-    
-    // Handle payments
-    uint256 platformFee = (price * payoutConfig.platformBps) / 10000;
-    uint256 sellerAmount = price - platformFee;
-    
-    // Pay platform fee
-    payPlatform(platformFee);
-    
-    // Pay seller
-    (bool success, ) = payable(seller).call{value: sellerAmount}("");
-    if (!success) {
-        revert TransferFailed();
-    }
-    
-    return newLowestPriceHash;
-  }
-
-  function getAvailableUnrevealedTokens(
-    uint256 count,
-    mapping(uint256 => uint256) storage nextLowestHash,
-    mapping(uint256 => uint256) storage seedHashPrice,
-    mapping(uint256 => address) storage seedHashOwner,
-    mapping(uint256 => MintInfo) storage seedHashMintInfo,
-    uint256 lowestPriceHash
-  ) public view returns (uint256[] memory tokenHashes, uint256[] memory prices, address[] memory sellers) {
-    // Initialize arrays to store results with maximum size of count
-    tokenHashes = new uint256[](count);
-    prices = new uint256[](count);
-    sellers = new address[](count);
-    
-    uint256 foundCount = 0;
-    uint256 currentHash = lowestPriceHash;
-    
-    // Traverse the linked list to find valid tokens
-    while (currentHash != 0 && foundCount < count) {
-        // Check if this token is valid (exists, is for sale, and not revealed)
-        if (seedHashPrice[currentHash] > 0 && seedHashOwner[currentHash] != address(0)) {
-            MintInfo memory mintInfo = seedHashMintInfo[currentHash];
-            if (mintInfo.quantity != 0 && mintInfo.key != bytes32("fulfilled")) {
-                // Found a valid token
-                tokenHashes[foundCount] = currentHash;
-                prices[foundCount] = seedHashPrice[currentHash];
-                sellers[foundCount] = seedHashOwner[currentHash];
-                foundCount++;
-            }
-        }
-        
-        // Move to the next token in the list
-        currentHash = nextLowestHash[currentHash];
-    }
-    
-    // If we found fewer tokens than requested, resize the arrays
-    if (foundCount < count) {
-        // Create new arrays of the correct size
-        uint256[] memory resizedTokenHashes = new uint256[](foundCount);
-        uint256[] memory resizedPrices = new uint256[](foundCount);
-        address[] memory resizedSellers = new address[](foundCount);
-        
-        // Copy data to the resized arrays
-        for (uint256 i = 0; i < foundCount; i++) {
-            resizedTokenHashes[i] = tokenHashes[i];
-            resizedPrices[i] = prices[i];
-            resizedSellers[i] = sellers[i];
-        }
-        
-        // Return the resized arrays
-        return (resizedTokenHashes, resizedPrices, resizedSellers);
-    }
-    
-    return (tokenHashes, prices, sellers);
-  }
-
-
-  function payPlatform(uint256 fee) public {
-    address[] memory recipients = new address[](1);
-    recipients[0] = PLATFORM;
-    uint16[] memory splits = new uint16[](1);
-    splits[0] = 10000;
-    ArchetypePayouts(PAYOUTS).updateBalances{value: fee}(
-      fee,
-      address(0), // native token
-      recipients,
-      splits
-    );
-  }
-
   function validateAffiliate(
     address affiliate,
     bytes calldata signature,
@@ -643,19 +449,6 @@ library ArchetypeLogicErc1155Random {
     address signer = ECDSA.recover(signedMessagehash, signature);
 
     if (signer != affiliateSigner) {
-      revert InvalidSignature();
-    }
-  }
-
-  function validateFulfillment(
-    uint256 seed,
-    bytes calldata signature,
-    address fulfillmentSigner
-  ) public view {
-    bytes32 signedMessageHash = ECDSA.toEthSignedMessageHash(keccak256(abi.encodePacked(seed)));
-    address signer = ECDSA.recover(signedMessageHash, signature);
-
-    if (signer != fulfillmentSigner) {
       revert InvalidSignature();
     }
   }
@@ -673,60 +466,6 @@ library ArchetypeLogicErc1155Random {
     return MerkleProofLib.verify(auth.proof, auth.key, keccak256(abi.encodePacked(account)));
   }
 
-  function getRandomTokenIds(
-    uint16[] storage tokenPool,
-    uint16[] memory tokenIdsExcluded,
-    uint256 quantity,
-    uint256 seed
-  ) public returns (uint16[] memory) {
-    uint16[] memory tokenIds = new uint16[](quantity);
-
-    uint256 retries = 0;
-    uint256 MAX_RETRIES = 10;
-
-    uint256 i = 0;
-    while (i < quantity) {
-      if (tokenPool.length == 0) {
-        revert MaxSupplyExceeded();
-      }
-
-      uint256 rand = uint256(keccak256(abi.encode(seed, i)));
-      uint256 randIdx = rand % tokenPool.length;
-      uint16 selectedToken = tokenPool[randIdx];
-
-      if (
-        retries < MAX_RETRIES &&
-        tokenIdsExcluded.length > 0 &&
-        isExcluded(selectedToken, tokenIdsExcluded)
-      ) {
-        // If the token is excluded, retry for this position in tokenIds array
-        // If after 10 retries it still hasn't found a non-excluded token, use whatever token is selected even if it's excluded.
-        seed = rand; // Update the seed for the next iteration
-        retries++;
-        continue;
-      }
-
-      tokenIds[i] = selectedToken;
-
-      // remove token from pool
-      tokenPool[randIdx] = tokenPool[tokenPool.length - 1];
-      tokenPool.pop();
-
-      retries = 0;
-      i++;
-    }
-
-    return tokenIds;
-  }
-
-  function isExcluded(uint16 tokenId, uint16[] memory excludedList) internal pure returns (bool) {
-    for (uint256 i = 0; i < excludedList.length; i++) {
-      if (tokenId == excludedList[i]) {
-        return true;
-      }
-    }
-    return false;
-  }
 
   function _msgSender() internal view returns (address) {
     return msg.sender == BATCH ? tx.origin : msg.sender;

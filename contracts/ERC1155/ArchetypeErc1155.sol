@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Archetype v0.8.0 - ERC1155-Random
+// Archetype v0.8.0 - ERC1155
 //
 //        d8888                 888               888
 //       d88888                 888               888
@@ -15,43 +15,32 @@
 
 pragma solidity ^0.8.20;
 
-import "./ArchetypeLogicErc1155Random.sol";
+import "./ArchetypeLogicErc1155.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 import "solady/src/utils/LibString.sol";
 
-contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpgradeable, ERC2981Upgradeable {
+contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeable, ERC2981Upgradeable {
   //
   // EVENTS
   //
   event Invited(bytes32 indexed key, bytes32 indexed cid);
   event Referral(address indexed affiliate, address token, uint128 wad, uint256 numMints);
   event Withdrawal(address indexed src, address token, uint128 wad);
-  event RequestRandomness(uint256 indexed seedHash);
-  event FulfillRandomness(uint256 indexed seedHash, uint256 seed, uint256 combinedSeed);
-  event UnrevealedTokenListed(uint256 indexed seedHash, uint256 price);
-  event UnrevealedTokenSold(uint256 indexed seedHash, address from, address to, uint256 price);
-  event UnrevealedTokenDelisted(uint256 indexed seedHash);
 
   //
   // VARIABLES
   //
   mapping(bytes32 => AdvancedInvite) public invites;
+  mapping(bytes32 => uint256) public packedBonusDiscounts;
   mapping(address => mapping(bytes32 => uint256)) private _minted;
   mapping(bytes32 => uint256) private _listSupply;
   mapping(address => uint128) private _ownerBalance;
   mapping(address => mapping(address => uint128)) private _affiliateBalance;
 
-
-  mapping(uint256 => address) public seedHashOwner; // Current owner of unrevealed token
-  mapping(uint256 => uint256) public seedHashPrice; // Listed price if for sale (0 means not for sale)
-  
-  uint256 public lowestPriceHash; // Current lowest price hash
-  mapping(uint256 => uint256) public nextLowestHash; // Points to next lowest priced hash
-
-  uint256 public totalSupply;
+  uint256[] private _tokenSupply;
 
   Config public config;
   PayoutConfig public payoutConfig;
@@ -59,9 +48,6 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
 
   string public name;
   string public symbol;
-
-  mapping(uint256 => MintInfo) public seedHashMintInfo;
-  bytes32 private constant FULFILLED_KEY = bytes32("fulfilled");
 
   //
   // METHODS
@@ -82,13 +68,12 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
       config_.affiliateFee > MAXBPS ||
       config_.affiliateDiscount > MAXBPS ||
       config_.affiliateSigner == address(0) ||
-      config_.fulfillmentSigner == address(0) ||
       config_.maxBatchSize == 0
     ) {
       revert InvalidConfig();
     }
-
     config = config_;
+    _tokenSupply = new uint256[](config_.maxSupply.length);
     __Ownable_init();
 
     uint256 totalShares = payoutConfig_.ownerBps +
@@ -107,32 +92,71 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   // PUBLIC
   //
 
-  function mint(
+  function mintToken(
     Auth calldata auth,
     uint256 quantity,
+    uint256 tokenId,
     address affiliate,
-    bytes calldata signature,
-    uint256 seedHash
+    bytes calldata signature
   ) external payable {
-    mintTo(auth, quantity, _msgSender(), affiliate, signature, seedHash);
+    mintTo(auth, quantity, msg.sender, tokenId, affiliate, signature);
+  }
+
+  function batchMintTo(
+    Auth calldata auth,
+    address[] calldata toList,
+    uint256[] calldata quantityList,
+    uint256[] calldata tokenIdList,
+    address affiliate,
+    bytes calldata signature
+  ) external payable {
+    if (quantityList.length != toList.length || quantityList.length != tokenIdList.length) {
+      revert InvalidConfig();
+    }
+
+    uint256 quantity;
+    for (uint256 i = 0; i < quantityList.length; i++) {
+      quantity += quantityList[i];
+    }
+
+    ValidationArgs memory args;
+    {
+      args = ValidationArgs({
+        owner: owner(),
+        affiliate: affiliate,
+        quantities: quantityList,
+        tokenIds: tokenIdList,
+        totalQuantity: quantity,
+        listSupply: _listSupply[auth.key]
+      });
+    }
+
+    AdvancedInvite storage invite = invites[auth.key];
+
+    if (invite.unitSize > 1) {
+      revert NotSupported();
+    }
+
+    validateAndCreditMint(invite, auth, args, affiliate, signature);
+
+    for (uint256 i = 0; i < toList.length; i++) {
+      bytes memory _data;
+      _mint(toList[i], tokenIdList[i], quantityList[i], _data);
+      _tokenSupply[tokenIdList[i] - 1] += quantityList[i];
+    }
   }
 
   function mintTo(
     Auth calldata auth,
     uint256 quantity,
     address to,
+    uint256 tokenId,
     address affiliate,
-    bytes calldata signature,
-    uint256 seedHash
+    bytes calldata signature
   ) public payable {
 
     if (to == address(0)) {
       revert MintToZeroAddress();
-    }
-
-    MintInfo memory mintInfo = seedHashMintInfo[seedHash];
-    if (mintInfo.quantity != 0 || mintInfo.key == FULFILLED_KEY) {
-      revert SeedHashAlreadyExists();
     }
 
     AdvancedInvite storage invite = invites[auth.key];
@@ -141,69 +165,74 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
       quantity = quantity * invite.unitSize;
     }
 
-    validateAndCreditMint(invite, auth, quantity, totalSupply, affiliate, signature);
-  
-    seedHashMintInfo[seedHash] = MintInfo({
-      key: auth.key,
-      to: to,
-      quantity: quantity,
-      blockNumber: block.number
-    });
-
-    // Set initial owner of the unrevealed token
-    seedHashOwner[seedHash] = to;
-
-    emit RequestRandomness(seedHash);
-  }
-
-  function validateAndCreditMint(
-    AdvancedInvite storage invite,
-    Auth calldata auth,
-    uint256 quantity,
-    uint256 curSupply,
-    address affiliate,
-    bytes calldata signature
-  ) internal {
-    uint256 totalQuantity = quantity;
-
     ValidationArgs memory args;
     {
+      uint256[] memory tokenIds = new uint256[](1);
+      tokenIds[0] = tokenId;
+      uint256[] memory quantities = new uint256[](1);
+      quantities[0] = quantity;
       args = ValidationArgs({
         owner: owner(),
         affiliate: affiliate,
-        quantity: totalQuantity,
-        curSupply: curSupply,
+        quantities: quantities,
+        tokenIds: tokenIds,
+        totalQuantity: quantity,
         listSupply: _listSupply[auth.key]
       });
     }
 
-    uint128 cost = uint128(
-      ArchetypeLogicErc1155Random.computePrice(
+    validateAndCreditMint(invite, auth, args, affiliate, signature);
+
+    for (uint256 j = 0; j < args.tokenIds.length; j++) {
+      bytes memory _data;
+      _mint(to, args.tokenIds[j], args.quantities[j], _data);
+      _tokenSupply[args.tokenIds[j] - 1] += args.quantities[j];
+    }
+  }
+
+  function validateAndCreditMint(
+      AdvancedInvite storage invite,
+      Auth calldata auth,
+      ValidationArgs memory args,
+      address affiliate,
+      bytes calldata signature
+    ) internal {
+
+     uint128 cost = uint128(
+      ArchetypeLogicErc1155.computePrice(
         invite,
         config.affiliateDiscount,
-        quantity,
+        args.totalQuantity,
         args.listSupply,
         args.affiliate != address(0)
       )
     );
-
-    ArchetypeLogicErc1155Random.validateMint(invite, config, auth, _minted, signature, args, cost);
+    
+    ArchetypeLogicErc1155.validateMint(
+      invite,
+      config,
+      auth,
+      _minted,
+      _tokenSupply,
+      signature,
+      args,
+      cost
+    );
 
     if (invite.limit < invite.maxSupply) {
-      _minted[_msgSender()][auth.key] += totalQuantity;
+      _minted[msg.sender][auth.key] += args.totalQuantity;
     }
-    if (invite.maxSupply < UINT32_MAX) {
-      _listSupply[auth.key] += totalQuantity;
+    if (invite.maxSupply < 2**32 - 1) {
+      _listSupply[auth.key] += args.totalQuantity;
     }
-    totalSupply += totalQuantity;
 
-    ArchetypeLogicErc1155Random.updateBalances(
+    ArchetypeLogicErc1155.updateBalances(
       invite,
       config,
       _ownerBalance,
       _affiliateBalance,
       affiliate,
-      quantity,
+      args.totalQuantity,
       cost
     );
 
@@ -226,7 +255,7 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   }
 
   function withdrawTokens(address[] memory tokens) public {
-    ArchetypeLogicErc1155Random.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
+    ArchetypeLogicErc1155.withdrawTokens(payoutConfig, _ownerBalance, owner(), tokens);
   }
 
   function withdrawAffiliate() external {
@@ -236,7 +265,7 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   }
 
   function withdrawTokensAffiliate(address[] memory tokens) public {
-    ArchetypeLogicErc1155Random.withdrawTokensAffiliate(_affiliateBalance, tokens);
+    ArchetypeLogicErc1155.withdrawTokensAffiliate(_affiliateBalance, tokens);
   }
 
   function ownerBalance() external view returns (uint128) {
@@ -267,8 +296,21 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     return PLATFORM;
   }
 
-  function tokenPool() external view returns (uint16[] memory) {
-    return config.tokenPool;
+  function tokenSupply(uint256 tokenId) external view returns (uint256) {
+    if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
+    return _tokenSupply[tokenId - 1];
+  }
+
+  function totalSupply() external view returns (uint256) {
+    uint256 supply = 0;
+    for (uint256 i = 0; i < _tokenSupply.length; i++) {
+      supply += _tokenSupply[i];
+    }
+    return supply;
+  }
+
+  function maxSupply() external view returns (uint32[] memory) {
+    return config.maxSupply;
   }
 
   function computePrice(
@@ -278,46 +320,14 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   ) external view returns (uint256) {
     AdvancedInvite storage i = invites[key];
     uint256 listSupply_ = _listSupply[key];
-    return ArchetypeLogicErc1155Random.computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
+    return ArchetypeLogicErc1155.computePrice(i, config.affiliateDiscount, quantity, listSupply_, affiliateUsed);
   }
 
   //
   // OWNER ONLY
   //
 
-  function airdropTo(
-    address[] calldata toList,
-    uint256[] calldata quantityList,
-    uint256[] calldata tokenIdList
-  ) external _onlyOwner {
-    if (options.airdropLocked) {
-      revert LockedForever();
-    }
-
-    if (quantityList.length != toList.length || quantityList.length != tokenIdList.length) {
-      revert InvalidConfig();
-    }
-
-    uint256 quantity = 0;
-    for (uint256 i = 0; i < toList.length; i++) {
-      bytes memory _data;
-      _mint(toList[i], tokenIdList[i], quantityList[i], _data);
-      quantity += quantityList[i];
-    }
-
-    if ((totalSupply + quantity) > config.maxSupply) {
-      revert MaxSupplyExceeded();
-    }
-    totalSupply += quantity;
-  }
-
-  /// @notice the password is "forever"
-  function lockAirdrop(string memory password) external _onlyOwner {
-    _checkPassword(password);
-    options.airdropLocked = true;
-  }
-
-  function setBaseURI(string memory baseUri) external _onlyOwner {
+  function setBaseURI(string memory baseUri) external onlyOwner {
     if (options.uriLocked) {
       revert LockedForever();
     }
@@ -332,48 +342,27 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
   }
 
   /// @notice the password is "forever"
-  // token pool will be appended. Be careful changing.
-  function appendTokenPool(uint16[] memory newTokens, string memory password) public _onlyOwner {
-    _checkPassword(password);
-    if (options.tokenPoolLocked) {
-      revert LockedForever();
-    }
-
-    for (uint256 i = 0; i < newTokens.length; i++) {
-      config.tokenPool.push(newTokens[i]);
-    }
-  }
-
-  /// @notice the password is "forever"
-  // token pool will be completely replaced. Be careful changing.
-  function replaceTokenPool(uint16[] memory newTokens, string memory password) external _onlyOwner {
-    _checkPassword(password);
-    if (options.tokenPoolLocked) {
-      revert LockedForever();
-    }
-
-    config.tokenPool = newTokens;
-  }
-
-  /// @notice the password is "forever"
-  function lockTokenPool(string memory password) external _onlyOwner {
-    _checkPassword(password);
-    options.tokenPoolLocked = true;
-  }
-
-  /// @notice the password is "forever"
   // max supply cannot subceed total supply. Be careful changing.
-  function setMaxSupply(uint32 maxSupply, string memory password) external _onlyOwner {
-    _checkPassword(password);
+  function setMaxSupply(uint32[] memory newMaxSupply, string memory password) external onlyOwner {
+    if (keccak256(abi.encodePacked(password)) != keccak256(abi.encodePacked("forever"))) {
+      revert WrongPassword();
+    }
+
     if (options.maxSupplyLocked) {
       revert LockedForever();
     }
 
-    if (maxSupply < totalSupply) {
-      revert MaxSupplyExceeded();
+    for (uint256 i = 0; i < _tokenSupply.length; i++) {
+      if (newMaxSupply[i] < _tokenSupply[i]) {
+        revert MaxSupplyExceeded();
+      }
     }
 
-    config.maxSupply = maxSupply;
+    // increase size of token supply array to match new max supply
+    for (uint256 i = _tokenSupply.length; i < newMaxSupply.length; i++) {
+      _tokenSupply.push(0);
+    }
+    config.maxSupply = newMaxSupply;
   }
 
   /// @notice the password is "forever"
@@ -392,7 +381,6 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
 
     config.affiliateFee = affiliateFee;
   }
-
 
   function setAffiliateDiscount(uint16 affiliateDiscount) external _onlyOwner {
     if (options.affiliateFeeLocked) {
@@ -420,14 +408,15 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     payoutConfig.ownerAltPayout = ownerAltPayout;
   }
 
-  function lockOwnerAltPayout() external _onlyOwner {
+  /// @notice the password is "forever"
+  function lockOwnerAltPayout(string memory password) external _onlyOwner {
+    _checkPassword(password);
     options.ownerAltPayoutLocked = true;
   }
 
   function setMaxBatchSize(uint16 maxBatchSize) external _onlyOwner {
     config.maxBatchSize = maxBatchSize;
   }
-
 
   function setInvite(
     bytes32 _key,
@@ -444,8 +433,8 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
       maxSupply: _invite.maxSupply,
       interval: 0,
       unitSize: _invite.unitSize,
-      tokenAddress: _invite.tokenAddress,
-      tokenIdsExcluded: _invite.tokenIdsExcluded
+      tokenIds: _invite.tokenIds,
+      tokenAddress: _invite.tokenAddress
     }));
   }
 
@@ -468,145 +457,15 @@ contract ArchetypeErc1155Random is Initializable, ERC1155Upgradeable, OwnableUpg
     emit Invited(_key, _cid);
   }
 
-  function setFulfillmentSigner(address _fulfillmentSigner) external onlyOwner {
-    if (_fulfillmentSigner == address(0)) {
-      revert InvalidConfig();
-    }
-    config.fulfillmentSigner = _fulfillmentSigner;
-  }
-
-  //
-  // FULFILL MINT
-  //
-
-  function fulfillRandomMint(uint256 seed, bytes memory signature) external {
-    uint256 seedHash = uint256(keccak256(abi.encodePacked(seed)));
-
-    ArchetypeLogicErc1155Random.validateFulfillment(seed, signature, config.fulfillmentSigner);
-
-    MintInfo memory mintInfo = seedHashMintInfo[seedHash];
-    if (mintInfo.quantity == 0) {
-      revert InvalidSeed();
-    }
-
-    // Get current owner for minting tokens to
-    address currentOwner = seedHashOwner[seedHash];
-
-    uint256 combinedSeed = uint256(keccak256(abi.encodePacked(seed, mintInfo.blockNumber)));
-
-    uint16[] memory tokenIds;
-    tokenIds = ArchetypeLogicErc1155Random.getRandomTokenIds(
-      config.tokenPool,
-      invites[mintInfo.key].tokenIdsExcluded,
-      mintInfo.quantity,
-      combinedSeed
-    );
-
-    for (uint256 j = 0; j < tokenIds.length; j++) {
-      bytes memory _data;
-      _mint(currentOwner, tokenIds[j], 1, _data);
-    }
-
-    emit FulfillRandomness(seedHash, seed, combinedSeed);
-    seedHashMintInfo[seedHash].quantity = 0;
-    seedHashMintInfo[seedHash].key = FULFILLED_KEY;
-  }
-
-  //
-  // UNREVEALED TOKEN TRADING
-  //
-
-  function listUnrevealedToken(uint256 seedHash, uint256 price) external {
-    if (seedHashOwner[seedHash] != _msgSender()) {
-      revert NotTokenOwner();
-    }
-
-    MintInfo memory mintInfo = seedHashMintInfo[seedHash];
-    if (mintInfo.quantity == 0 || mintInfo.key == FULFILLED_KEY) {
-      revert TokenAlreadyRevealed();
-    }
-
-    if (price == 0) {
-      revert PriceTooLow();
-    }
-    
-    // Check if this hash was already listed with a different price
-    if (seedHashPrice[seedHash] > 0) {
-        // If it's already in the list, remove it first
-        lowestPriceHash = ArchetypeLogicErc1155Random.removeFromPriceList(seedHash, nextLowestHash, seedHashPrice, lowestPriceHash);
-    }
-    
-    // Set the new price
-    lowestPriceHash = ArchetypeLogicErc1155Random.insertIntoPriceList(seedHash, price, nextLowestHash, seedHashPrice, lowestPriceHash);
-    
-    emit UnrevealedTokenListed(seedHash, price);
-  }
-
-  function delistUnrevealedToken(uint256 seedHash) external {
-    if (seedHashOwner[seedHash] != _msgSender()) {
-      revert NotTokenOwner();
-    }
-    
-    lowestPriceHash = ArchetypeLogicErc1155Random.removeFromPriceList(seedHash, nextLowestHash, seedHashPrice, lowestPriceHash);
-    
-    emit UnrevealedTokenDelisted(seedHash);
-  }
-
-  function buyLowestPricedUnrevealedToken() external payable {
-    uint256 seedHash;
-    address seller;
-    uint256 price;
-    
-    (seedHash, seller, price) = ArchetypeLogicErc1155Random.findLowestPricedToken(
-        nextLowestHash,
-        seedHashPrice,
-        seedHashOwner,
-        seedHashMintInfo,
-        lowestPriceHash
-    );
-    
-    if (msg.value < price) {
-        revert InsufficientEthSent();
-    }
-    
-    lowestPriceHash = ArchetypeLogicErc1155Random.processPurchase(
-        seedHash,
-        seller,
-        price,
-        payoutConfig,
-        nextLowestHash,
-        seedHashPrice,
-        seedHashOwner,
-        lowestPriceHash
-    );
-    
-    if (msg.value > price) {
-        _refund(_msgSender(), msg.value - price);
-    }
-    
-    emit UnrevealedTokenSold(seedHash, seller, _msgSender(), price);
-  }
-
-  function getAvailableUnrevealedTokens(uint256 count) external view returns (
-    uint256[] memory tokenHashes, 
-    uint256[] memory prices, 
-    address[] memory sellers
-  ) {
-    return ArchetypeLogicErc1155Random.getAvailableUnrevealedTokens(
-        count,
-        nextLowestHash,
-        seedHashPrice,
-        seedHashOwner,
-        seedHashMintInfo,
-        lowestPriceHash
-    );
-  }
-
   //
   // INTERNAL
   //
   function _startTokenId() internal view virtual returns (uint256) {
     return 1;
+  }
+
+  function _exists(uint256 tokenId) internal view returns (bool) {
+    return tokenId > 0 && tokenId <= _tokenSupply.length;
   }
 
   function _msgSender() internal view override returns (address) {

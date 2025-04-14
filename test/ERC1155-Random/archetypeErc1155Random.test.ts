@@ -812,7 +812,7 @@ describe("FactoryErc1155Random", function () {
       ArchetypeErc1155Random.attach(newCollectionAddress)
     );
 
-    await nft.connect(owner).setBonusInvite(
+    await nft.connect(owner).setAdvancedInvite(
       ethers.ZeroHash,
       ipfsh.ctod(CID_ZERO),
       {
@@ -827,25 +827,7 @@ describe("FactoryErc1155Random", function () {
         reservePrice: 0,
         delta: 0,
         interval: 0,
-      },
-      [
-        {
-          numMints: 20,
-          numBonusMints: 12,
-        },
-        {
-          numMints: 15,
-          numBonusMints: 6,
-        },
-        {
-          numMints: 10,
-          numBonusMints: 3,
-        },
-        {
-          numMints: 4,
-          numBonusMints: 1,
-        },
-      ]
+      }
     );
 
     // valid signature (from affiliateSigner)
@@ -857,7 +839,6 @@ describe("FactoryErc1155Random", function () {
 
     const { seedHash, seed, signature } = await generateSeedHash();
 
-    // get 1 free
     await nft
       .connect(accountZero)
       .mint(
@@ -877,7 +858,7 @@ describe("FactoryErc1155Random", function () {
     await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
       ethers.parseEther("0.0135") * BigInt(5)
     ); // 15%
-    await expect(await nft.totalSupply()).to.equal(6);
+    await expect(await nft.totalSupply()).to.equal(5);
 
     await nft.fulfillRandomMint(seed, signature);
 
@@ -891,7 +872,6 @@ describe("FactoryErc1155Random", function () {
       signature: signatureTwo,
     } = await generateSeedHash();
 
-    // get 2 free
     await nft
       .connect(accountZero)
       .mint(
@@ -905,7 +885,7 @@ describe("FactoryErc1155Random", function () {
         }
       );
 
-    await expect(await nft.totalSupply()).to.equal(17);
+    await expect(await nft.totalSupply()).to.equal(14);
 
     const {
       seedHash: seedHashThree,
@@ -913,7 +893,6 @@ describe("FactoryErc1155Random", function () {
       signature: signatureThree,
     } = await generateSeedHash();
 
-    // get 12 free
     await nft
       .connect(accountZero)
       .mint(
@@ -927,7 +906,7 @@ describe("FactoryErc1155Random", function () {
         }
       );
 
-    await expect(await nft.totalSupply()).to.equal(50);
+    await expect(await nft.totalSupply()).to.equal(35);
 
     await nft.fulfillRandomMint(seedTwo, signatureTwo);
     await nft.fulfillRandomMint(seedThree, signatureThree);
@@ -3543,6 +3522,408 @@ describe("FactoryErc1155Random", function () {
         value: ethers.parseEther("0.08"),
       })
     ).to.be.revertedWithCustomError(archetype, "SeedHashAlreadyExists");
+  });
+
+  it("should require a fee to deploy a collection", async function () {
+    const [accountZero, accountOne, accountTwo] = await ethers.getSigners();
+
+    const owner = accountOne;
+    const holder = accountZero;
+    const platform = accountTwo;
+
+    const deployPrice = ethers.parseEther('0.05')
+
+    await factory.connect(accountZero).setDeployFee(deployPrice)
+
+    expect(await factory.deployFee()).to.equal(deployPrice)
+
+    await expect(factory.createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
+    )).to.be.revertedWithCustomError(factory, "InsufficientDeployFee");
+
+    const newCollection = await factory.createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
+      { value: deployPrice }
+    );
+
+    const result = await newCollection.wait();
+
+    const newCollectionAddress = result.logs[0].address || "";
+
+    const nft = ArchetypeErc1155Random.attach(newCollectionAddress);
+
+    const symbol = await nft.symbol();
+
+    await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice);
+
+    // test overpay and refund
+
+    const preUserBalance = await ethers.provider.getBalance(accountOne.address);
+
+    const newCollectionTwo = await factory.connect(accountOne).createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG,
+      { value: ethers.parseEther("0.1") }
+    );
+
+    const postFactoryBalance = await ethers.provider.getBalance(
+      await factory.getAddress()
+    );
+    const postUserBalance = await ethers.provider.getBalance(accountOne.address);
+
+    const delta = ethers.parseEther("0.001");
+    expect(postUserBalance).closeTo(preUserBalance - deployPrice, delta);
+    expect(postFactoryBalance).eq(0);
+
+    await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice * BigInt(2));
+
+    await factory.connect(accountZero).setDeployFee(0)
+
+  });
+
+  it("test unrevealed token listing, delisting and buying", async function () {
+    const [accountZero, accountOne, accountTwo, accountThree] = await ethers.getSigners();
+  
+    const owner = accountOne;
+    const platform = accountTwo;
+    const buyer = accountThree;
+
+  
+    const newCollection = await factory.createCollection(
+      owner.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
+    );
+  
+    const result = await newCollection.wait();
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155Random.attach(newCollectionAddress);
+  
+    // Set up the price for minting
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: 5000,
+      unitSize: 0,
+      tokenIdsExcluded: [],
+      tokenAddress: ZERO,
+    });
+  
+    // Mint four unrevealed tokens
+    const { seedHash: seedHash1, seed: seed1, signature: signature1 } = await generateSeedHash();
+    const { seedHash: seedHash2, seed: seed2, signature: signature2 } = await generateSeedHash();
+    const { seedHash: seedHash3, seed: seed3, signature: signature3 } = await generateSeedHash();
+    const { seedHash: seedHash4, seed: seed4, signature: signature4 } = await generateSeedHash();
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash1,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash2,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash3,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash4,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    // Check total supply
+    expect(await nft.totalSupply()).to.equal(4);
+  
+    // List the first unrevealed token for sale
+    await nft.connect(accountZero).listUnrevealedToken(seedHash1, ethers.parseEther("0.5"));
+    
+    // List the second unrevealed token for a lower price
+    await nft.connect(accountZero).listUnrevealedToken(seedHash2, ethers.parseEther("0.3"));
+    
+    // List the third unrevealed token for an even lower price
+    await nft.connect(accountZero).listUnrevealedToken(seedHash3, ethers.parseEther("0.2"));
+  
+    // Check that the lowest price hash is set correctly
+    expect(await nft.lowestPriceHash()).to.equal(seedHash3);
+    
+    // Delist the lowest priced token
+    await nft.connect(accountZero).delistUnrevealedToken(seedHash3);
+    
+    // Check that the lowest price hash is updated
+    expect(await nft.lowestPriceHash()).to.equal(seedHash2);
+  
+    // Try to delist a token that isn't owned by the sender
+    await expect(
+      nft.connect(buyer).delistUnrevealedToken(seedHash2)
+    ).to.be.revertedWithCustomError(archetype, "NotTokenOwner");
+  
+    // Get balances before the purchase
+    const sellerBalanceBefore = await ethers.provider.getBalance(accountZero.address);
+    const platformBalanceBefore = await archetypePayouts.balance(platform.address);
+    
+    // Buy the lowest priced token (now seedHash2)
+    await nft.connect(buyer).buyLowestPricedUnrevealedToken({
+      value: ethers.parseEther("0.5") // Sending more than needed
+    });
+    
+    // Check that the ownership was transferred
+    expect(await nft.seedHashOwner(seedHash2)).to.equal(buyer.address);
+    
+    // Check that the price was set to 0 (not for sale anymore)
+    expect(await nft.seedHashPrice(seedHash2)).to.equal(0);
+    
+    // Check that the lowest price hash is updated
+    expect(await nft.lowestPriceHash()).to.equal(seedHash1);
+    
+    // Check that the seller received payment (minus platform fee)
+    const sellerBalanceAfter = await ethers.provider.getBalance(accountZero.address);
+    const platformBalanceAfter = await archetypePayouts.balance(platform.address);
+    
+    // Platform fee is 5% (500 bps) of 0.3 ETH = 0.015 ETH
+    // Seller should receive 0.3 - 0.015 = 0.285 ETH
+    const platformFee = ethers.parseEther("0.3") * BigInt(500) / BigInt(10000);
+    const sellerPayment = ethers.parseEther("0.3") - platformFee;
+    
+    // Check that the seller received the correct amount
+    expect(sellerBalanceAfter - sellerBalanceBefore).to.equal(sellerPayment);
+    
+    // Check that the platform fee was credited in the payout contract
+    expect(platformBalanceAfter - platformBalanceBefore).to.equal(platformFee);
+    
+    // Try to buy a non-existent or delisted token
+    await nft.connect(accountZero).fulfillRandomMint(seed3, signature3);
+    
+    // List the fourth token
+    await nft.connect(accountZero).listUnrevealedToken(seedHash4, ethers.parseEther("0.4"));
+    
+    // Check buying tokens with insufficient ETH
+    await expect(
+      nft.connect(buyer).buyLowestPricedUnrevealedToken({
+        value: ethers.parseEther("0.1")
+      })
+    ).to.be.revertedWithCustomError(archetypeLogic, "InsufficientEthSent");
+    
+    // Fulfill the tokens and verify that they can't be listed anymore
+    await nft.connect(accountZero).fulfillRandomMint(seed1, signature1);
+    
+    // Try to list a token that has been revealed (should fail)
+    await expect(
+      nft.connect(accountZero).listUnrevealedToken(seedHash1, ethers.parseEther("0.5"))
+    ).to.be.revertedWithCustomError(archetype, "TokenAlreadyRevealed");
+    
+    // Try to buy when no tokens are available
+    await nft.connect(accountZero).fulfillRandomMint(seed4, signature4);
+    
+    await expect(
+      nft.connect(buyer).buyLowestPricedUnrevealedToken({
+        value: ethers.parseEther("0.5")
+      })
+    ).to.be.revertedWithCustomError(archetypeLogic, "NotListed");
+    
+    // Test full flow
+    const { seedHash: seedHash5, seed: seed5, signature: signature5 } = await generateSeedHash();
+    
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash5,
+      { value: ethers.parseEther("0.1") }
+    );
+    
+    // List the token
+    await nft.connect(accountZero).listUnrevealedToken(seedHash5, ethers.parseEther("0.25"));
+    
+    // Buy the token using the buyAvailableToken function
+    await nft.connect(buyer).buyLowestPricedUnrevealedToken({
+      value: ethers.parseEther("0.25")
+    });
+    
+    // Check that the ownership was transferred
+    expect(await nft.seedHashOwner(seedHash5)).to.equal(buyer.address);
+  });
+
+  it("test getAvailableUnrevealedTokens for unrevealed tokens", async function () {
+    const [accountZero, accountOne, accountTwo, accountThree] = await ethers.getSigners();
+  
+    const owner = accountOne;
+    const buyer = accountTwo;
+    const platform = accountThree;
+  
+    const newCollection = await factory.createCollection(
+      owner.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
+    );
+  
+    const result = await newCollection.wait();
+    const newCollectionAddress = result.logs[0].address || "";
+    const nft = ArchetypeErc1155Random.attach(newCollectionAddress);
+  
+    // Set up the price for minting
+    await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
+      price: ethers.parseEther("0.1"),
+      start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
+      end: 0,
+      limit: 300,
+      maxSupply: 5000,
+      unitSize: 0,
+      tokenIdsExcluded: [],
+      tokenAddress: ZERO,
+    });
+  
+    // Mint six unrevealed tokens
+    const { seedHash: seedHash1, seed: seed1, signature: signature1 } = await generateSeedHash();
+    const { seedHash: seedHash2, seed: seed2, signature: signature2 } = await generateSeedHash();
+    const { seedHash: seedHash3, seed: seed3, signature: signature3 } = await generateSeedHash();
+    const { seedHash: seedHash4, seed: seed4, signature: signature4 } = await generateSeedHash();
+    const { seedHash: seedHash5, seed: seed5, signature: signature5 } = await generateSeedHash();
+    const { seedHash: seedHash6, seed: seed6, signature: signature6 } = await generateSeedHash();
+  
+    // Mint tokens with different owners
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash1,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash2,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(buyer).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash3,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(buyer).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash4,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash5,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    await nft.connect(accountZero).mint(
+      { key: ethers.ZeroHash, proof: [] }, 1, ZERO, "0x", seedHash6,
+      { value: ethers.parseEther("0.1") }
+    );
+  
+    // Check total supply
+    expect(await nft.totalSupply()).to.equal(6);
+  
+    // List the tokens for sale at different prices
+    await nft.connect(accountZero).listUnrevealedToken(seedHash1, ethers.parseEther("0.5"));
+    await nft.connect(accountZero).listUnrevealedToken(seedHash2, ethers.parseEther("0.3"));
+    await nft.connect(buyer).listUnrevealedToken(seedHash3, ethers.parseEther("0.2"));
+    await nft.connect(buyer).listUnrevealedToken(seedHash4, ethers.parseEther("0.6"));
+    await nft.connect(accountZero).listUnrevealedToken(seedHash5, ethers.parseEther("0.4"));
+    // Note: seedHash6 is not listed
+  
+    // Make sure the lowest price hash is correctly set
+    expect(await nft.lowestPriceHash()).to.equal(seedHash3);
+  
+    // Test with count = 0
+    const [emptyTokens, emptyPrices, emptySellers] = await nft.getAvailableUnrevealedTokens(0);
+    expect(emptyTokens.length).to.equal(0);
+    expect(emptyPrices.length).to.equal(0);
+    expect(emptySellers.length).to.equal(0);
+  
+    // Test with count = 2
+    const [twoTokens, twoPrices, twoSellers] = await nft.getAvailableUnrevealedTokens(2);
+    expect(twoTokens.length).to.equal(2);
+    expect(twoPrices.length).to.equal(2);
+    expect(twoSellers.length).to.equal(2);
+    
+    // Verify the tokens are returned in order of price (lowest first)
+    expect(twoTokens[0]).to.equal(seedHash3);
+    expect(twoPrices[0]).to.equal(ethers.parseEther("0.2"));
+    expect(twoSellers[0]).to.equal(buyer.address);
+    
+    expect(twoTokens[1]).to.equal(seedHash2);
+    expect(twoPrices[1]).to.equal(ethers.parseEther("0.3"));
+    expect(twoSellers[1]).to.equal(accountZero.address);
+  
+    // Test with count = 10 (more than available, should return all 5 listed tokens)
+    const [allTokens, allPrices, allSellers] = await nft.getAvailableUnrevealedTokens(10);
+    expect(allTokens.length).to.equal(5);
+    expect(allPrices.length).to.equal(5);
+    expect(allSellers.length).to.equal(5);
+  
+    // Verify the tokens are in correct order (by price)
+    expect(allTokens[0]).to.equal(seedHash3);  // 0.2 ETH
+    expect(allTokens[1]).to.equal(seedHash2);  // 0.3 ETH
+    expect(allTokens[2]).to.equal(seedHash5);  // 0.4 ETH
+    expect(allTokens[3]).to.equal(seedHash1);  // 0.5 ETH
+    expect(allTokens[4]).to.equal(seedHash4);  // 0.6 ETH
+  
+    // Verify the prices match
+    expect(allPrices[0]).to.equal(ethers.parseEther("0.2"));
+    expect(allPrices[1]).to.equal(ethers.parseEther("0.3"));
+    expect(allPrices[2]).to.equal(ethers.parseEther("0.4"));
+    expect(allPrices[3]).to.equal(ethers.parseEther("0.5"));
+    expect(allPrices[4]).to.equal(ethers.parseEther("0.6"));
+  
+    // Verify the sellers match
+    expect(allSellers[0]).to.equal(buyer.address);
+    expect(allSellers[1]).to.equal(accountZero.address);
+    expect(allSellers[2]).to.equal(accountZero.address);
+    expect(allSellers[3]).to.equal(accountZero.address);
+    expect(allSellers[4]).to.equal(buyer.address);
+  
+    // Test that revealed tokens are not included
+    await nft.connect(accountZero).fulfillRandomMint(seed3, signature3);
+  
+    const [afterRevealTokens, afterRevealPrices, afterRevealSellers] = await nft.getAvailableUnrevealedTokens(10);
+    expect(afterRevealTokens.length).to.equal(4); // One less than before
+    expect(afterRevealPrices.length).to.equal(4);
+    expect(afterRevealSellers.length).to.equal(4);
+    
+    // seedHash3 should no longer be in the list
+    for (let i = 0; i < afterRevealTokens.length; i++) {
+      expect(afterRevealTokens[i]).to.not.equal(seedHash3);
+    }
+  
+    // Now the lowest price should be 0.3 ETH (seedHash2)
+    expect(afterRevealTokens[0]).to.equal(seedHash2);
+    expect(afterRevealPrices[0]).to.equal(ethers.parseEther("0.3"));
+  
+    // Test after delisting a token
+    await nft.connect(accountZero).delistUnrevealedToken(seedHash2);
+    
+    const [afterDelistTokens, afterDelistPrices, afterDelistSellers] = await nft.getAvailableUnrevealedTokens(10);
+    expect(afterDelistTokens.length).to.equal(3); // One less than before
+    expect(afterDelistPrices.length).to.equal(3);
+    expect(afterDelistSellers.length).to.equal(3);
+    
+    // seedHash2 should no longer be in the list
+    for (let i = 0; i < afterDelistTokens.length; i++) {
+      expect(afterDelistTokens[i]).to.not.equal(seedHash2);
+    }
+  
+    // Now the lowest price should be 0.4 ETH (seedHash5)
+    expect(afterDelistTokens[0]).to.equal(seedHash5);
+    expect(afterDelistPrices[0]).to.equal(ethers.parseEther("0.4"));
   });
 });
 
