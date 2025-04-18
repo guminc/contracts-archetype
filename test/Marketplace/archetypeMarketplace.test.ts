@@ -558,5 +558,243 @@ describe("ArchetypeMarketplace Tests", function () {
       const finalNext2 = await marketplace.nextLowestCollectionListing(await nft721.getAddress(), listingId2);
       expect(finalNext2).to.equal(listingId1);
     });
+
+    it("should allow creating and canceling bids", async function () {
+      
+      // Create a bid
+      const bidAmount = ethers.parseEther("0.5");
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: bidAmount }
+      );
+      
+      const bidId = await marketplace.totalBids();
+      expect(bidId).to.equal(1);
+      
+      // Verify bid details
+      const bid = await marketplace.getBidDetails(bidId);
+      expect(bid.bidder).to.equal(buyer.address);
+      expect(bid.tokenAddress).to.equal(await nft721.getAddress());
+      expect(bid.price).to.equal(bidAmount);
+      expect(bid.active).to.equal(true);
+      
+      // Record balance after creating bid but before canceling
+      const balanceAfterBidding = await ethers.provider.getBalance(buyer.address);
+      
+      // Cancel the bid
+      const cancelTx = await marketplace.connect(buyer).cancelBid(bidId);
+      const cancelReceipt = await cancelTx.wait();
+      
+      // Calculate gas costs for the cancel transaction
+      const gasCost = cancelReceipt.gasUsed * cancelReceipt.gasPrice;
+      
+      // Verify bid is canceled
+      const updatedBid = await marketplace.getBidDetails(bidId);
+      expect(updatedBid.active).to.equal(false);
+      
+      // Get final balance
+      const finalBalance = await ethers.provider.getBalance(buyer.address);
+      
+      // Final balance should be approximately: initial balance - gas costs for both transactions
+      // Allow a small tolerance for rounding errors
+      const tolerance = ethers.parseEther("0.001");
+      
+      // The bidAmount should have been refunded
+      const expectedBalance = balanceAfterBidding + bidAmount - gasCost;
+      expect(finalBalance).to.be.closeTo(expectedBalance, tolerance);
+    });
+    
+    it("should reject bid creation with zero price", async function () {
+      await expect(
+        marketplace.connect(buyer).createBid(await nft721.getAddress(), { value: 0 })
+      ).to.be.revertedWithCustomError(marketplace, "BidTooLow");
+    });
+    
+    it("should reject unauthorized bid cancellation", async function () {
+      // Create a bid
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.5") }
+      );
+      
+      const bidId = await marketplace.totalBids();
+      
+      // Try to cancel someone else's bid
+      await expect(
+        marketplace.connect(seller).cancelBid(bidId)
+      ).to.be.revertedWithCustomError(marketplace, "NotAuthorized");
+    });
+    
+    it("should allow increasing bid price", async function () {
+      // Create a bid
+      const initialBidAmount = ethers.parseEther("0.5");
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: initialBidAmount }
+      );
+      
+      const bidId = await marketplace.totalBids();
+      
+      // Increase the bid
+      const additionalAmount = ethers.parseEther("0.3");
+      await marketplace.connect(buyer).increaseBidPrice(bidId, { value: additionalAmount });
+      
+      // Verify bid price was updated
+      const updatedBid = await marketplace.getBidDetails(bidId);
+      expect(updatedBid.price).to.equal(initialBidAmount + additionalAmount);
+    });
+    
+    it("should allow seller to fulfill a bid", async function () {
+      // Create a bid
+      const bidAmount = ethers.parseEther("0.5");
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: bidAmount }
+      );
+      
+      const bidId = await marketplace.totalBids();
+      
+      // Check seller and buyer balances before fulfilling
+      const sellerBalanceBefore = await ethers.provider.getBalance(seller.address);
+      
+      // Fulfill the bid with token #1
+      const tx = await marketplace.connect(seller).fulfillBid(bidId, 1);
+      const receipt = await tx.wait();
+      
+      // Calculate gas costs
+      const gasUsed = receipt?.gasUsed || BigInt(0);
+      const gasPrice = receipt?.gasPrice || BigInt(0);
+      const gasCost = gasUsed * gasPrice;
+      
+      // Check ownership transferred
+      expect(await nft721.ownerOf(1)).to.equal(buyer.address);
+      
+      // Check seller received payment (minus fee and gas)
+      const sellerBalanceAfter = await ethers.provider.getBalance(seller.address);
+      const fee = (bidAmount * BigInt(250)) / BigInt(10000); // 2.5% fee
+      const expectedSellerBalance = sellerBalanceBefore + bidAmount - fee - gasCost;
+      
+      // Allow for some small rounding errors
+      const tolerance = ethers.parseEther("0.001");
+      expect(sellerBalanceAfter).to.be.closeTo(expectedSellerBalance, tolerance);
+      
+      // Check bid is no longer active
+      const updatedBid = await marketplace.getBidDetails(bidId);
+      expect(updatedBid.active).to.equal(false);
+    });
+    
+    it("should handle collection-wide bids correctly", async function () {
+      // Create multiple bids of different prices
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.2") }
+      );
+      const lowBidId = await marketplace.totalBids();
+      
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.5") }
+      );
+      const highBidId = await marketplace.totalBids();
+      
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.3") }
+      );
+      const mediumBidId = await marketplace.totalBids();
+      
+      // Get collection bids (should be ordered highest to lowest)
+      const [bidIds, prices, bidders] = await marketplace.getAvailableCollectionBids(
+        await nft721.getAddress(),
+        10
+      );
+      
+      // Check order (highest first)
+      expect(bidIds[0]).to.equal(highBidId);
+      expect(bidIds[1]).to.equal(mediumBidId);
+      expect(bidIds[2]).to.equal(lowBidId);
+      
+      // Verify prices are in descending order
+      for (let i = 0; i < prices.length - 1; i++) {
+        expect(prices[i]).to.be.greaterThanOrEqual(prices[i + 1]);
+      }
+    });
+    
+    it("should update bid sort order when price increases", async function () {
+      // Create bids with different prices
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.2") }
+      );
+      const lowBidId = await marketplace.totalBids();
+      
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.5") }
+      );
+      const highBidId = await marketplace.totalBids();
+      
+      // Verify initial highest bid
+      expect(await marketplace.collectionHighestBidId(await nft721.getAddress())).to.equal(highBidId);
+      
+      // Increase the low bid to be higher than the "high" bid
+      await marketplace.connect(buyer).increaseBidPrice(lowBidId, { value: ethers.parseEther("0.4") });
+      
+      // Verify the order has changed
+      expect(await marketplace.collectionHighestBidId(await nft721.getAddress())).to.equal(lowBidId);
+      
+      // Check next pointer
+      const nextAfterNewHighest = await marketplace.nextHighestCollectionBid(
+        await nft721.getAddress(),
+        lowBidId
+      );
+      expect(nextAfterNewHighest).to.equal(highBidId);
+    });
+    
+    it("should prevent fulfilling a bid for a token the seller doesn't own", async function () {
+      // Create a bid
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.5") }
+      );
+      
+      const bidId = await marketplace.totalBids();
+      
+      // Try to fulfill with a token the seller doesn't own (it belongs to the buyer)
+      await nft721.connect(seller).transferFrom(seller.address, unauthorizedUser.address, 4);
+      
+      await expect(
+        marketplace.connect(seller).fulfillBid(bidId, 4)
+      ).to.be.revertedWithCustomError(marketplace, "NotTokenOwner");
+    });
+    
+    it("should get all of a user's bids for a collection", async function () {
+      // Create multiple bids for the same user and collection
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.2") }
+      );
+      const bidId1 = await marketplace.totalBids();
+      
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        { value: ethers.parseEther("0.3") }
+      );
+      const bidId2 = await marketplace.totalBids();
+      
+      // Create a bid for a different collection
+      await marketplace.connect(buyer).createBid(
+        await nft1155.getAddress(),
+        { value: ethers.parseEther("0.4") }
+      );
+      
+      // Get user's bids for ERC721 collection
+      const userBids = await marketplace.getUserBidsForCollection(buyer.address, await nft721.getAddress());
+      
+      // Verify we got the right bids
+      expect(userBids.length).to.equal(2);
+      expect(userBids).to.include(bidId1);
+      expect(userBids).to.include(bidId2);
+    });
   });
 });

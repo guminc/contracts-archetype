@@ -37,6 +37,10 @@ error FeeTooHigh();
 error NotApproved();
 error OwnershipChanged();
 error NotPlatform();
+error BidTooLow();
+error InvalidBid();
+error BidNotActive();
+error NoBidsFound();
 
 contract ArchetypeMarketplace {
     using ERC165Checker for address;
@@ -55,12 +59,22 @@ contract ArchetypeMarketplace {
     // STRUCTS
     //
     enum TokenType { ERC721, ERC1155 }
+
     struct Listing {
         address tokenAddress;
         address seller;
         uint256 tokenId;
         uint128 price;
         uint64 listingId;
+        bool active;
+        TokenType tokenType;
+    }
+
+    struct Bid {
+        address tokenAddress;
+        address bidder;
+        uint128 price;
+        uint64 bidId;
         bool active;
         TokenType tokenType;
     }
@@ -73,13 +87,24 @@ contract ArchetypeMarketplace {
     uint64 public totalListings;
     mapping(uint256 => Listing) public listings;
     
+    uint64 public totalBids;
+    mapping(uint256 => Bid) public bids;
+    
     // Track active listings per seller and token
     // Format: seller => tokenAddress => tokenId => listingId
     mapping(address => mapping(address => mapping(uint256 => uint64))) public sellerListings;
+    
+    // Track active bids per bidder and collection
+    // Format: bidder => tokenAddress => bidId[]
+    mapping(address => mapping(address => uint64[])) public bidderCollectionBids;
 
-    // Collection-specific price tracking
+    // Collection-specific price tracking for listings (lowest first)
     mapping(address => uint64) public collectionLowestPriceListingId;
     mapping(address => mapping(uint64 => uint64)) public nextLowestCollectionListing;
+    
+    // Collection-specific price tracking for bids (highest first)
+    mapping(address => uint64) public collectionHighestBidId;
+    mapping(address => mapping(uint64 => uint64)) public nextHighestCollectionBid;
 
     //
     // EVENTS
@@ -89,11 +114,15 @@ contract ArchetypeMarketplace {
     event ListingCanceled(uint64 indexed listingId);
     event TokenSold(uint64 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
     event FeeUpdated(uint256 newFeePercentage);
+    event BidCreated(uint64 indexed bidId, address indexed tokenAddress, address bidder, uint256 price);
+    event BidUpdated(uint64 indexed bidId, uint256 newPrice);
+    event BidCanceled(uint64 indexed bidId);
+    event BidFulfilled(uint64 indexed bidId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
 
     constructor() {}
 
     //
-    // PUBLIC
+    // LISTING
     //
     function listItem(address tokenAddress, uint256 tokenId, uint256 price) external {
         if (price == 0) revert PriceTooLow();
@@ -225,6 +254,114 @@ contract ArchetypeMarketplace {
     }
 
     //
+    // BIDDING
+    //
+    function createBid(address tokenAddress) external payable {
+        if (msg.value == 0) revert BidTooLow();
+        
+        // Verify token type
+        TokenType tokenType;
+        if (tokenAddress.supportsInterface(ERC721_INTERFACE_ID)) {
+            tokenType = TokenType.ERC721;
+        } else if (tokenAddress.supportsInterface(ERC1155_INTERFACE_ID)) {
+            tokenType = TokenType.ERC1155;
+        } else {
+            revert UnsupportedToken();
+        }
+        
+        // Create bid
+        uint64 bidId = totalBids + 1;
+        bids[bidId] = Bid({
+            bidder: _msgSender(),
+            tokenAddress: tokenAddress,
+            price: uint128(msg.value),
+            bidId: bidId,
+            active: true,
+            tokenType: tokenType
+        });
+        
+        // Track bids by bidder and collection
+        bidderCollectionBids[_msgSender()][tokenAddress].push(bidId);
+        
+        // Insert into price-ordered collection bid list
+        _insertIntoCollectionBidList(bidId, tokenAddress);
+        
+        totalBids++;
+        
+        emit BidCreated(bidId, tokenAddress, _msgSender(), msg.value);
+    }
+    
+    function increaseBidPrice(uint64 bidId) external payable {
+        if (msg.value == 0) revert BidTooLow();
+        
+        Bid storage bid = bids[bidId];
+        if (!bid.active) revert InvalidBid();
+        if (bid.bidder != _msgSender()) revert NotAuthorized();
+        
+        uint256 newPrice = uint256(bid.price) + msg.value;
+        
+        _removeFromCollectionBidList(bidId, bid.tokenAddress);
+        
+        bid.price = uint128(newPrice);
+        
+        _insertIntoCollectionBidList(bidId, bid.tokenAddress);
+        
+        emit BidUpdated(bidId, newPrice);
+    }
+    
+    function cancelBid(uint64 bidId) external {
+        Bid storage bid = bids[bidId];
+        if (!bid.active) revert InvalidBid();
+        if (bid.bidder != _msgSender()) revert NotAuthorized();
+        
+        _removeFromCollectionBidList(bidId, bid.tokenAddress);
+        bid.active = false;
+        
+        // Return funds to bidder
+        (bool success, ) = payable(bid.bidder).call{value: bid.price}("");
+        if (!success) revert TransferFailed();
+        
+        emit BidCanceled(bidId);
+    }
+    
+    function fulfillBid(uint64 bidId, uint256 tokenId) external {
+        Bid storage bid = bids[bidId];
+        if (!bid.active) revert BidNotActive();
+        
+        // Verify token ownership and approval
+        if (bid.tokenType == TokenType.ERC721) {
+            if (IERC721(bid.tokenAddress).ownerOf(tokenId) != _msgSender()) revert NotTokenOwner();
+            if (IERC721(bid.tokenAddress).getApproved(tokenId) != address(this) && 
+                !IERC721(bid.tokenAddress).isApprovedForAll(_msgSender(), address(this))) revert NotApproved();
+        } else if (bid.tokenType == TokenType.ERC1155) {
+            if (IERC1155(bid.tokenAddress).balanceOf(_msgSender(), tokenId) < 1) revert InsufficientBalance();
+            if (!IERC1155(bid.tokenAddress).isApprovedForAll(_msgSender(), address(this))) revert NotApproved();
+        }
+        
+        _processFulfillBid(bidId, tokenId, bid);
+    }
+    
+    function getAvailableCollectionBids(address tokenAddress, uint256 count) external view returns (
+        uint64[] memory bidIds,
+        uint128[] memory prices,
+        address[] memory bidders
+    ) {
+        return _getAvailableBidsFromLinkedList(
+            count,
+            collectionHighestBidId[tokenAddress],
+            nextHighestCollectionBid[tokenAddress]
+        );
+    }
+    
+    function getUserBidsForCollection(address user, address tokenAddress) external view returns (uint64[] memory) {
+        return bidderCollectionBids[user][tokenAddress];
+    }
+    
+    function getBidDetails(uint64 bidId) external view returns (Bid memory) {
+        return bids[bidId];
+    }
+
+    //
     // PLATFORM ADMIN
     //
     function setFeePercentage(uint256 _feePercentage) external _onlyPlatform {
@@ -320,6 +457,31 @@ contract ArchetypeMarketplace {
         );
     }
     
+    function _processFulfillBid(uint64 bidId, uint256 tokenId, Bid storage bid) internal {
+        _removeFromCollectionBidList(bidId, bid.tokenAddress);
+        
+        uint256 fee = (bid.price * feePercentage) / 10000;
+        uint256 sellerAmount = bid.price - fee;
+        
+        bid.active = false;
+        
+        // Transfer token to bidder
+        if (bid.tokenType == TokenType.ERC721) {
+            IERC721(bid.tokenAddress).safeTransferFrom(_msgSender(), bid.bidder, tokenId);
+        } else if (bid.tokenType == TokenType.ERC1155) {
+            IERC1155(bid.tokenAddress).safeTransferFrom(_msgSender(), bid.bidder, tokenId, 1, "");
+        }
+        
+        // Pay platform fee
+        _payPlatform(fee);
+        
+        // Pay seller
+        (bool sellerTransferSuccess, ) = payable(_msgSender()).call{value: sellerAmount}("");
+        if (!sellerTransferSuccess) revert TransferFailed();
+        
+        emit BidFulfilled(bidId, bid.tokenAddress, tokenId, _msgSender(), bid.bidder, bid.price);
+    }
+    
     function _findFirstActiveAndValidListing(
         uint64 startListingId, 
         mapping(uint64 => uint64) storage nextListingMapping
@@ -370,19 +532,12 @@ contract ArchetypeMarketplace {
         }
         
         if (foundCount < count) {
-            uint64[] memory resizedListingIds = new uint64[](foundCount);
-            uint128[] memory resizedPrices = new uint128[](foundCount);
-            uint256[] memory resizedTokenIds = new uint256[](foundCount);
-            address[] memory resizedSellers = new address[](foundCount);
-            
-            for (uint256 i = 0; i < foundCount; i++) {
-                resizedListingIds[i] = listingIds[i];
-                resizedPrices[i] = prices[i];
-                resizedTokenIds[i] = tokenIds[i];
-                resizedSellers[i] = sellers[i];
+            assembly {
+                mstore(listingIds, foundCount)
+                mstore(prices, foundCount)
+                mstore(tokenIds, foundCount)
+                mstore(sellers, foundCount)
             }
-            
-            return (resizedListingIds, resizedPrices, resizedTokenIds, resizedSellers);
         }
         
         return (listingIds, prices, tokenIds, sellers);
@@ -427,6 +582,86 @@ contract ArchetypeMarketplace {
         }
         
         nextLowestCollectionListing[tokenAddress][listingId] = 0;
+    }
+    
+    function _insertIntoCollectionBidList(uint64 bidId, address tokenAddress) internal {
+        uint128 price = bids[bidId].price;
+        uint64 highestBidId = collectionHighestBidId[tokenAddress];
+        
+        if (highestBidId == 0 || 
+            price > bids[highestBidId].price) {
+            nextHighestCollectionBid[tokenAddress][bidId] = highestBidId;
+            collectionHighestBidId[tokenAddress] = bidId;
+        } else {
+            uint64 current = highestBidId;
+            uint64 next = nextHighestCollectionBid[tokenAddress][current];
+            
+            while (next != 0 && bids[next].price >= price) {
+                current = next;
+                next = nextHighestCollectionBid[tokenAddress][current];
+            }
+            
+            nextHighestCollectionBid[tokenAddress][bidId] = next;
+            nextHighestCollectionBid[tokenAddress][current] = bidId;
+        }
+    }
+    
+    function _removeFromCollectionBidList(uint64 bidId, address tokenAddress) internal {
+        if (bidId == collectionHighestBidId[tokenAddress]) {
+            collectionHighestBidId[tokenAddress] = nextHighestCollectionBid[tokenAddress][bidId];
+        } else {
+            uint64 current = collectionHighestBidId[tokenAddress];
+            
+            while (current != 0 && nextHighestCollectionBid[tokenAddress][current] != bidId) {
+                current = nextHighestCollectionBid[tokenAddress][current];
+            }
+
+            if (current != 0) {
+                // Update the link to skip over the bid being removed
+                nextHighestCollectionBid[tokenAddress][current] = nextHighestCollectionBid[tokenAddress][bidId];
+            }
+        }
+        
+        nextHighestCollectionBid[tokenAddress][bidId] = 0;
+    }
+    
+    function _getAvailableBidsFromLinkedList(
+        uint256 count,
+        uint64 highestBidId,
+        mapping(uint64 => uint64) storage nextMapping
+    ) internal view returns (
+        uint64[] memory bidIds,
+        uint128[] memory prices,
+        address[] memory bidders
+    ) {
+        bidIds = new uint64[](count);
+        prices = new uint128[](count);
+        bidders = new address[](count);
+        
+        uint256 foundCount = 0;
+        uint64 currentBidId = highestBidId;
+        
+        while (currentBidId != 0 && foundCount < count) {
+            Bid storage bid = bids[currentBidId];
+            if (bid.active) {
+                bidIds[foundCount] = currentBidId;
+                prices[foundCount] = bid.price;
+                bidders[foundCount] = bid.bidder;
+                foundCount++;
+            }
+            
+            currentBidId = nextMapping[currentBidId];
+        }
+        
+        if (foundCount < count) {
+            assembly {
+                mstore(bidIds, foundCount)
+                mstore(prices, foundCount)
+                mstore(bidders, foundCount)
+            }
+        }
+        
+        return (bidIds, prices, bidders);
     }
 
     function _payPlatform(uint256 fee) internal {
