@@ -50,19 +50,19 @@ contract ArchetypeMarketplace {
     address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
     address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
     address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
-        
+
     //
     // STRUCTS
     //
     enum TokenType { ERC721, ERC1155 }
     struct Listing {
         address tokenAddress;
-        TokenType tokenType;
-        uint256 tokenId;
         address seller;
-        uint256 price;
-        uint256 listingId;
+        uint256 tokenId;
+        uint128 price;
+        uint64 listingId;
         bool active;
+        TokenType tokenType;
     }
 
     //
@@ -70,24 +70,24 @@ contract ArchetypeMarketplace {
     //
     uint256 public feePercentage = 250; // 2.5% (in basis points);
     
-    uint256 public totalListings;
+    uint64 public totalListings;
     mapping(uint256 => Listing) public listings;
     
     // Track active listings per seller and token
     // Format: seller => tokenAddress => tokenId => listingId
-    mapping(address => mapping(address => mapping(uint256 => uint256))) public sellerListings;
+    mapping(address => mapping(address => mapping(uint256 => uint64))) public sellerListings;
 
     // Collection-specific price tracking
-    mapping(address => uint256) public collectionLowestPriceListingId;
-    mapping(address => mapping(uint256 => uint256)) public nextLowestCollectionListing;
+    mapping(address => uint64) public collectionLowestPriceListingId;
+    mapping(address => mapping(uint64 => uint64)) public nextLowestCollectionListing;
 
     //
     // EVENTS
     //
-    event ListingCreated(uint256 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, uint256 price, TokenType tokenType);
-    event ListingUpdated(uint256 indexed listingId, uint256 newPrice);
-    event ListingCanceled(uint256 indexed listingId);
-    event TokenSold(uint256 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
+    event ListingCreated(uint64 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, uint256 price);
+    event ListingUpdated(uint64 indexed listingId, uint256 newPrice);
+    event ListingCanceled(uint64 indexed listingId);
+    event TokenSold(uint64 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
     event FeeUpdated(uint256 newFeePercentage);
 
     constructor() {}
@@ -99,7 +99,7 @@ contract ArchetypeMarketplace {
         if (price == 0) revert PriceTooLow();
 
         // Check if seller already has an active listing for this token
-        uint256 existingListingId = sellerListings[_msgSender()][tokenAddress][tokenId];
+        uint64 existingListingId = sellerListings[_msgSender()][tokenAddress][tokenId];
         if (listings[existingListingId].active) {
             // Update the existing listing price
             updateListingPrice(existingListingId, price);
@@ -127,13 +127,13 @@ contract ArchetypeMarketplace {
             revert UnsupportedToken();
         }
         
-        uint256 listingId = totalListings + 1;
+        uint64 listingId = totalListings + 1;
         listings[listingId] = Listing({
             tokenAddress: tokenAddress,
             tokenType: tokenType,
             tokenId: tokenId,
             seller: _msgSender(),
-            price: price,
+            price: uint128(price),
             listingId: listingId,
             active: true
         });
@@ -144,10 +144,10 @@ contract ArchetypeMarketplace {
         
         totalListings++;
         
-        emit ListingCreated(listingId, tokenAddress, tokenId, _msgSender(), price, tokenType);
+        emit ListingCreated(listingId, tokenAddress, tokenId, _msgSender(), price);
     }
     
-    function updateListingPrice(uint256 listingId, uint256 newPrice) public {
+    function updateListingPrice(uint64 listingId, uint256 newPrice) public {
         if (newPrice == 0) revert PriceTooLow();
         
         Listing storage listing = listings[listingId];
@@ -158,14 +158,14 @@ contract ArchetypeMarketplace {
         
         _removeFromCollectionPriceList(listingId, listing.tokenAddress);
         
-        listing.price = newPrice;
+        listing.price = uint128(newPrice);
         
         _insertIntoCollectionPriceList(listingId, listing.tokenAddress);
         
         emit ListingUpdated(listingId, newPrice);
     }
     
-    function cancelListing(uint256 listingId) external {
+    function cancelListing(uint64 listingId) external {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert InvalidListing();
         if (listing.seller != _msgSender()) revert NotAuthorized();
@@ -182,7 +182,7 @@ contract ArchetypeMarketplace {
         emit ListingCanceled(listingId);
     }
     
-    function buyItem(uint256 listingId) external payable {
+    function buyItem(uint64 listingId) external payable {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert InvalidListing();
         if (msg.value < listing.price) revert InsufficientPayment();
@@ -193,10 +193,10 @@ contract ArchetypeMarketplace {
     }
     
     function buyLowestPricedCollectionItem(address tokenAddress) external payable {
-        uint256 lowestCollectionListingId = collectionLowestPriceListingId[tokenAddress];
+        uint64 lowestCollectionListingId = collectionLowestPriceListingId[tokenAddress];
         if (lowestCollectionListingId == 0) revert NoActiveListings();
         
-        uint256 currentListingId = _findFirstActiveAndValidListing(
+        uint64 currentListingId = _findFirstActiveAndValidListing(
             lowestCollectionListingId, 
             nextLowestCollectionListing[tokenAddress]
         );
@@ -208,8 +208,8 @@ contract ArchetypeMarketplace {
     }
     
     function getAvailableCollectionListings(address tokenAddress, uint256 count) external view returns (
-        uint256[] memory listingIds,
-        uint256[] memory prices,
+        uint64[] memory listingIds,
+        uint128[] memory prices,
         uint256[] memory tokenIds,
         address[] memory sellers
     ) {
@@ -220,7 +220,7 @@ contract ArchetypeMarketplace {
         );
     }
     
-    function getListingDetails(uint256 listingId) external view returns (Listing memory) {
+    function getListingDetails(uint64 listingId) external view returns (Listing memory) {
         return listings[listingId];
     }
 
@@ -280,7 +280,7 @@ contract ArchetypeMarketplace {
         return false;
     }
     
-    function _processPurchase(uint256 listingId, Listing storage listing) internal {
+    function _processPurchase(uint64 listingId, Listing storage listing) internal {
         if (!_verifyApproval(listing)) revert NotApproved();
         
         _removeFromCollectionPriceList(listingId, listing.tokenAddress);
@@ -321,10 +321,10 @@ contract ArchetypeMarketplace {
     }
     
     function _findFirstActiveAndValidListing(
-        uint256 startListingId, 
-        mapping(uint256 => uint256) storage nextListingMapping
-    ) internal view returns (uint256) {
-        uint256 currentListingId = startListingId;
+        uint64 startListingId, 
+        mapping(uint64 => uint64) storage nextListingMapping
+    ) internal view returns (uint64) {
+        uint64 currentListingId = startListingId;
         
         while (currentListingId != 0) {
             Listing storage listing = listings[currentListingId];
@@ -340,21 +340,21 @@ contract ArchetypeMarketplace {
     
     function _getAvailableListingsFromLinkedList(
         uint256 count,
-        uint256 lowestListingId,
-        mapping(uint256 => uint256) storage nextMapping
+        uint64 lowestListingId,
+        mapping(uint64 => uint64) storage nextMapping
     ) internal view returns (
-        uint256[] memory listingIds,
-        uint256[] memory prices,
+        uint64[] memory listingIds,
+        uint128[] memory prices,
         uint256[] memory tokenIds,
         address[] memory sellers
     ) {
-        listingIds = new uint256[](count);
-        prices = new uint256[](count);
+        listingIds = new uint64[](count);
+        prices = new uint128[](count);
         tokenIds = new uint256[](count);
         sellers = new address[](count);
         
         uint256 foundCount = 0;
-        uint256 currentListingId = lowestListingId;
+        uint64 currentListingId = lowestListingId;
         
         while (currentListingId != 0 && foundCount < count) {
             Listing storage listing = listings[currentListingId];
@@ -370,8 +370,8 @@ contract ArchetypeMarketplace {
         }
         
         if (foundCount < count) {
-            uint256[] memory resizedListingIds = new uint256[](foundCount);
-            uint256[] memory resizedPrices = new uint256[](foundCount);
+            uint64[] memory resizedListingIds = new uint64[](foundCount);
+            uint128[] memory resizedPrices = new uint128[](foundCount);
             uint256[] memory resizedTokenIds = new uint256[](foundCount);
             address[] memory resizedSellers = new address[](foundCount);
             
@@ -388,17 +388,17 @@ contract ArchetypeMarketplace {
         return (listingIds, prices, tokenIds, sellers);
     }
 
-    function _insertIntoCollectionPriceList(uint256 listingId, address tokenAddress) internal {
-        uint256 price = listings[listingId].price;
-        uint256 lowestCollectionListingId = collectionLowestPriceListingId[tokenAddress];
+    function _insertIntoCollectionPriceList(uint64 listingId, address tokenAddress) internal {
+        uint128 price = listings[listingId].price;
+        uint64 lowestCollectionListingId = collectionLowestPriceListingId[tokenAddress];
         
         if (lowestCollectionListingId == 0 || 
             price < listings[lowestCollectionListingId].price) {
             nextLowestCollectionListing[tokenAddress][listingId] = lowestCollectionListingId;
             collectionLowestPriceListingId[tokenAddress] = listingId;
         } else {
-            uint256 current = lowestCollectionListingId;
-            uint256 next = nextLowestCollectionListing[tokenAddress][current];
+            uint64 current = lowestCollectionListingId;
+            uint64 next = nextLowestCollectionListing[tokenAddress][current];
             
             while (next != 0 && listings[next].price <= price) {
                 current = next;
@@ -410,11 +410,11 @@ contract ArchetypeMarketplace {
         }
     }
     
-    function _removeFromCollectionPriceList(uint256 listingId, address tokenAddress) internal {
+    function _removeFromCollectionPriceList(uint64 listingId, address tokenAddress) internal {
         if (listingId == collectionLowestPriceListingId[tokenAddress]) {
             collectionLowestPriceListingId[tokenAddress] = nextLowestCollectionListing[tokenAddress][listingId];
         } else {
-            uint256 current = collectionLowestPriceListingId[tokenAddress];
+            uint64 current = collectionLowestPriceListingId[tokenAddress];
             
             while (current != 0 && nextLowestCollectionListing[tokenAddress][current] != listingId) {
                 current = nextLowestCollectionListing[tokenAddress][current];
