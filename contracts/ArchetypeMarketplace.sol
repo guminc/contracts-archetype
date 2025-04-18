@@ -46,7 +46,6 @@ contract ArchetypeMarketplace {
     //
     bytes4 private constant ERC721_INTERFACE_ID = 0x80ac58cd;
     bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
-    uint256 private constant FEE_DENOMINATOR = 10000;
 
     address constant PLATFORM = 0x8952caF7E5bf1fe63ebe94148ca802F3eF127C98;
     address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
@@ -96,7 +95,6 @@ contract ArchetypeMarketplace {
     //
     // PUBLIC
     //
-
     function listItem(address tokenAddress, uint256 tokenId, uint256 price) external {
         if (price == 0) revert PriceTooLow();
 
@@ -238,7 +236,6 @@ contract ArchetypeMarketplace {
     //
     // INTERNAL
     //
-
     function _verifyOwnership(Listing storage listing) internal view returns (bool) {
         if (listing.tokenType == TokenType.ERC721) {
             try IERC721(listing.tokenAddress).ownerOf(listing.tokenId) returns (address owner) {
@@ -288,7 +285,7 @@ contract ArchetypeMarketplace {
         
         _removeFromCollectionPriceList(listingId, listing.tokenAddress);
         
-        uint256 fee = (listing.price * feePercentage) / FEE_DENOMINATOR;
+        uint256 fee = (listing.price * feePercentage) / 10000;
         uint256 sellerAmount = listing.price - fee;
         
         // Clear seller's token listing reference
