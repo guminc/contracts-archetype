@@ -164,7 +164,7 @@ const config: HardhatUserConfig = {
       soneium_mainnet: "abc",
       superposition: "abc",
       ink_mainnet: "abc",
-      mantle_mainnet: "abc"
+      mantle_mainnet: process.env.MANTLESCAN_API_KEY || "",
     },
     customChains: [
       {
@@ -254,8 +254,10 @@ const config: HardhatUserConfig = {
         network: "mantle_mainnet",
         chainId: 5000,
         urls: {
-          apiURL: "https://explorer.mantle.xyz/api",
-          browserURL: "https://explorer.mantle.xyz",
+          // apiURL: "https://explorer.mantle.xyz/api",
+          // browserURL: "https://explorer.mantle.xyz",
+          apiURL: "https://api.mantlescan.xyz/api",
+          browserURL: "https://mantlescan.xyz",
         },
     },
     ],

@@ -11,7 +11,7 @@
 // d88P     888 888     "Y8888P 888  888  "Y8888   "Y888  "Y88888 88888P"   "Y8888
 //                                                            888 888
 //                                                       Y8b d88P 888
-//
+//                                                        "Y88P"  888
 
 pragma solidity ^0.8.20;
 
@@ -20,7 +20,9 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 
-// Error definitions
+//
+// ERRORS
+//
 error PriceTooLow();
 error InvalidListing();
 error UnsupportedToken();
@@ -39,7 +41,9 @@ error NotPlatform();
 contract ArchetypeMarketplace {
     using ERC165Checker for address;
 
-    // Constants
+    //
+    // CONSTANTS
+    //
     bytes4 private constant ERC721_INTERFACE_ID = 0x80ac58cd;
     bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
     uint256 private constant FEE_DENOMINATOR = 10000;
@@ -48,7 +52,9 @@ contract ArchetypeMarketplace {
     address constant BATCH = 0xEa49e7bE310716dA66725c84a5127d2F6A202eAf;
     address constant PAYOUTS = 0xaAfdfA4a935d8511bF285af11A0544ce7e4a1199;
         
-    // Listing structure
+    //
+    // STRUCTS
+    //
     enum TokenType { ERC721, ERC1155 }
     struct Listing {
         address tokenAddress;
@@ -60,7 +66,9 @@ contract ArchetypeMarketplace {
         bool active;
     }
 
-    // State variables
+    //
+    // VARIABLES
+    //
     uint256 public feePercentage = 250; // 2.5% (in basis points);
     
     uint256 public totalListings;
@@ -74,7 +82,9 @@ contract ArchetypeMarketplace {
     mapping(address => uint256) public collectionLowestPriceListingId;
     mapping(address => mapping(uint256 => uint256)) public nextLowestCollectionListing;
 
-    // Events
+    //
+    // EVENTS
+    //
     event ListingCreated(uint256 indexed listingId, address indexed tokenAddress, uint256 indexed tokenId, address seller, uint256 price, TokenType tokenType);
     event ListingUpdated(uint256 indexed listingId, uint256 newPrice);
     event ListingCanceled(uint256 indexed listingId);
@@ -83,9 +93,10 @@ contract ArchetypeMarketplace {
 
     constructor() {}
 
-    /**
-     * @dev List an NFT for sale
-     */
+    //
+    // PUBLIC
+    //
+
     function listItem(address tokenAddress, uint256 tokenId, uint256 price) external {
         if (price == 0) revert PriceTooLow();
 
@@ -138,9 +149,6 @@ contract ArchetypeMarketplace {
         emit ListingCreated(listingId, tokenAddress, tokenId, _msgSender(), price, tokenType);
     }
     
-    /**
-     * @dev Update the price of an existing listing
-     */
     function updateListingPrice(uint256 listingId, uint256 newPrice) public {
         if (newPrice == 0) revert PriceTooLow();
         
@@ -159,9 +167,6 @@ contract ArchetypeMarketplace {
         emit ListingUpdated(listingId, newPrice);
     }
     
-    /**
-     * @dev Cancel a listing
-     */
     function cancelListing(uint256 listingId) external {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert InvalidListing();
@@ -179,9 +184,6 @@ contract ArchetypeMarketplace {
         emit ListingCanceled(listingId);
     }
     
-    /**
-     * @dev Buy an NFT from a listing
-     */
     function buyItem(uint256 listingId) external payable {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert InvalidListing();
@@ -192,9 +194,6 @@ contract ArchetypeMarketplace {
         _processPurchase(listingId, listing);
     }
     
-    /**
-     * @dev Buy the lowest priced active listing for a specific collection
-     */
     function buyLowestPricedCollectionItem(address tokenAddress) external payable {
         uint256 lowestCollectionListingId = collectionLowestPriceListingId[tokenAddress];
         if (lowestCollectionListingId == 0) revert NoActiveListings();
@@ -210,9 +209,6 @@ contract ArchetypeMarketplace {
         _processPurchase(currentListingId, listing);
     }
     
-    /**
-     * @dev Get all listings for a collection ordered by price (lowest first)
-     */
     function getAvailableCollectionListings(address tokenAddress, uint256 count) external view returns (
         uint256[] memory listingIds,
         uint256[] memory prices,
@@ -226,23 +222,23 @@ contract ArchetypeMarketplace {
         );
     }
     
-    /**
-     * @dev Get detailed information about a specific listing
-     */
     function getListingDetails(uint256 listingId) external view returns (Listing memory) {
         return listings[listingId];
     }
 
-    // Platform admin functions
+    //
+    // PLATFORM ADMIN
+    //
     function setFeePercentage(uint256 _feePercentage) external _onlyPlatform {
         if (_feePercentage > 1000) revert FeeTooHigh(); // Max 10%
         feePercentage = _feePercentage;
         emit FeeUpdated(_feePercentage);
     }
 
-    /**
-     * @dev Verify the seller still owns the token
-     */
+    //
+    // INTERNAL
+    //
+
     function _verifyOwnership(Listing storage listing) internal view returns (bool) {
         if (listing.tokenType == TokenType.ERC721) {
             try IERC721(listing.tokenAddress).ownerOf(listing.tokenId) returns (address owner) {
@@ -261,9 +257,6 @@ contract ArchetypeMarketplace {
         return false;
     }
     
-    /**
-     * @dev Verify the marketplace is still approved to transfer the token
-     */
     function _verifyApproval(Listing storage listing) internal view returns (bool) {
         if (listing.tokenType == TokenType.ERC721) {
             try IERC721(listing.tokenAddress).getApproved(listing.tokenId) returns (address approved) {
@@ -290,9 +283,6 @@ contract ArchetypeMarketplace {
         return false;
     }
     
-    /**
-     * @dev Process a purchase transaction
-     */
     function _processPurchase(uint256 listingId, Listing storage listing) internal {
         if (!_verifyApproval(listing)) revert NotApproved();
         
@@ -333,9 +323,6 @@ contract ArchetypeMarketplace {
         );
     }
     
-    /**
-     * @dev Find the first active and valid listing in pricing list
-     */
     function _findFirstActiveAndValidListing(
         uint256 startListingId, 
         mapping(uint256 => uint256) storage nextListingMapping
@@ -354,9 +341,6 @@ contract ArchetypeMarketplace {
         revert NoActiveListings();
     }
     
-    /**
-     * @dev Get available listings from pricing list
-     */
     function _getAvailableListingsFromLinkedList(
         uint256 count,
         uint256 lowestListingId,
@@ -407,9 +391,6 @@ contract ArchetypeMarketplace {
         return (listingIds, prices, tokenIds, sellers);
     }
 
-    /**
-     * @dev Insert a listing into pricing list
-     */
     function _insertIntoCollectionPriceList(uint256 listingId, address tokenAddress) internal {
         uint256 price = listings[listingId].price;
         uint256 lowestCollectionListingId = collectionLowestPriceListingId[tokenAddress];
@@ -432,9 +413,6 @@ contract ArchetypeMarketplace {
         }
     }
     
-    /**
-     * @dev Remove a listing from pricing list
-     */
     function _removeFromCollectionPriceList(uint256 listingId, address tokenAddress) internal {
         if (listingId == collectionLowestPriceListingId[tokenAddress]) {
             collectionLowestPriceListingId[tokenAddress] = nextLowestCollectionListing[tokenAddress][listingId];
