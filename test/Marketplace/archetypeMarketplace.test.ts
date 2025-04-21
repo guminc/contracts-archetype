@@ -9,7 +9,8 @@ import {
   FactoryErc1155,
   ArchetypeLogicErc721a,
   ArchetypeLogicErc1155,
-  ArchetypePayouts
+  ArchetypePayouts,
+  TestErc20 // Add this import for the ERC20 token
 } from "../../typechain-types";
 import { IArchetypeErc721aConfig, IArchetypePayoutConfig, IArchetypeErc1155Config } from "../lib/types";
 import ipfsh from "ipfsh";
@@ -31,6 +32,7 @@ describe("ArchetypeMarketplace Tests", function () {
   let archetypeLogic721: ArchetypeLogicErc721a;
   let archetypeLogic1155: ArchetypeLogicErc1155;
   let archetypePayouts: ArchetypePayouts;
+  let mockToken: TestErc20; // Add ERC20 token for bids
   
   // Test accounts
   let owner: SignerWithAddress;
@@ -211,9 +213,16 @@ describe("ArchetypeMarketplace Tests", function () {
     const FactoryErc1155 = await ethers.getContractFactory("FactoryErc1155");
     factory1155 = asContractType<FactoryErc1155>(await FactoryErc1155.deploy(await nftImplementation1155.getAddress()));
     
-    // Deploy marketplace (reused across tests)
+    // Deploy mock ERC20 token
+    const TestErc20 = await ethers.getContractFactory("TestErc20");
+    mockToken = asContractType<TestErc20>(await TestErc20.deploy());
+    
+    // Mint tokens to buyer for testing bids
+    await mockToken.connect(buyer).mint(ethers.parseEther("10"));
+    
+    // Deploy marketplace with ERC20 token as bid token
     const ArchetypeMarketplace = await ethers.getContractFactory("ArchetypeMarketplace");
-    marketplace = asContractType<ArchetypeMarketplace>(await ArchetypeMarketplace.deploy());
+    marketplace = asContractType<ArchetypeMarketplace>(await ArchetypeMarketplace.deploy(await mockToken.getAddress()));
   });
 
   // Fresh setup for each test
@@ -230,6 +239,9 @@ describe("ArchetypeMarketplace Tests", function () {
     // Approve marketplace to transfer NFTs
     await nft721.connect(seller).setApprovalForAll(await marketplace.getAddress(), true);
     await nft1155.connect(seller).setApprovalForAll(await marketplace.getAddress(), true);
+    
+    // Approve marketplace to transfer buyer's ERC20 tokens for bids
+    await mockToken.connect(buyer).approve(await marketplace.getAddress(), ethers.parseEther("10"));
   });
 
   describe("Collection Linked List Management", function () {
@@ -468,7 +480,7 @@ describe("ArchetypeMarketplace Tests", function () {
       
       // 2. Query collections to verify ordering
       // Check ERC721 listings
-      const [erc721ListingIds, erc721Prices, erc721Sellers] = await marketplace.getAvailableCollectionListings(
+      const [erc721ListingIds, erc721Prices, erc721TokenIds, erc721Sellers] = await marketplace.getAvailableCollectionListings(
         await nft721.getAddress(),
         5
       );
@@ -479,7 +491,7 @@ describe("ArchetypeMarketplace Tests", function () {
       }
       
       // Check ERC1155 listings
-      const [erc1155ListingIds, erc1155Prices, erc1155Sellers] = await marketplace.getAvailableCollectionListings(
+      const [erc1155ListingIds, erc1155Prices, erc1155TokenIds, erc1155Sellers] = await marketplace.getAvailableCollectionListings(
         await nft1155.getAddress(),
         5
       );
@@ -559,13 +571,15 @@ describe("ArchetypeMarketplace Tests", function () {
       expect(finalNext2).to.equal(listingId1);
     });
 
-    it("should allow creating and canceling bids", async function () {
+    it("should allow creating and canceling bids with ERC20 tokens", async function () {
+      // Check initial ERC20 balance
+      const initialBalance = await mockToken.balanceOf(buyer.address);
       
       // Create a bid
       const bidAmount = ethers.parseEther("0.5");
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: bidAmount }
+        bidAmount
       );
       
       const bidId = await marketplace.totalBids();
@@ -578,43 +592,47 @@ describe("ArchetypeMarketplace Tests", function () {
       expect(bid.price).to.equal(bidAmount);
       expect(bid.active).to.equal(true);
       
-      // Record balance after creating bid but before canceling
-      const balanceAfterBidding = await ethers.provider.getBalance(buyer.address);
+      // No tokens should have been transferred yet (permissions-based approach)
+      const balanceAfterBidding = await mockToken.balanceOf(buyer.address);
+      expect(balanceAfterBidding).to.equal(initialBalance);
       
       // Cancel the bid
-      const cancelTx = await marketplace.connect(buyer).cancelBid(bidId);
-      const cancelReceipt = await cancelTx.wait();
-      
-      // Calculate gas costs for the cancel transaction
-      const gasCost = cancelReceipt.gasUsed * cancelReceipt.gasPrice;
+      await marketplace.connect(buyer).cancelBid(bidId);
       
       // Verify bid is canceled
       const updatedBid = await marketplace.getBidDetails(bidId);
       expect(updatedBid.active).to.equal(false);
-      
-      // Get final balance
-      const finalBalance = await ethers.provider.getBalance(buyer.address);
-      
-      // Final balance should be approximately: initial balance - gas costs for both transactions
-      // Allow a small tolerance for rounding errors
-      const tolerance = ethers.parseEther("0.001");
-      
-      // The bidAmount should have been refunded
-      const expectedBalance = balanceAfterBidding + bidAmount - gasCost;
-      expect(finalBalance).to.be.closeTo(expectedBalance, tolerance);
     });
     
-    it("should reject bid creation with zero price", async function () {
+    it("should reject bid creation when balance is insufficient", async function () {
+      // Create a bid with an amount larger than the buyer's balance
+      const largeAmount = ethers.parseEther("100"); // Assuming buyer has less than 100 WETH
+      
       await expect(
-        marketplace.connect(buyer).createBid(await nft721.getAddress(), { value: 0 })
-      ).to.be.revertedWithCustomError(marketplace, "BidTooLow");
+        marketplace.connect(buyer).createBid(await nft721.getAddress(), largeAmount)
+      ).to.be.revertedWithCustomError(marketplace, "InsufficientBalance");
+    });
+    
+    it("should reject bid creation when allowance is insufficient", async function () {
+      // Set a low allowance
+      await mockToken.connect(buyer).approve(await marketplace.getAddress(), ethers.parseEther("0.1"));
+      
+      // Try to create a bid with an amount larger than the allowance
+      const bidAmount = ethers.parseEther("1.0");
+      
+      await expect(
+        marketplace.connect(buyer).createBid(await nft721.getAddress(), bidAmount)
+      ).to.be.revertedWithCustomError(marketplace, "NotApproved");
+      
+      // Reset approval for other tests
+      await mockToken.connect(buyer).approve(await marketplace.getAddress(), ethers.parseEther("10"));
     });
     
     it("should reject unauthorized bid cancellation", async function () {
       // Create a bid
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.5") }
+        ethers.parseEther("0.5")
       );
       
       const bidId = await marketplace.totalBids();
@@ -630,14 +648,14 @@ describe("ArchetypeMarketplace Tests", function () {
       const initialBidAmount = ethers.parseEther("0.5");
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: initialBidAmount }
+        initialBidAmount
       );
       
       const bidId = await marketplace.totalBids();
       
       // Increase the bid
       const additionalAmount = ethers.parseEther("0.3");
-      await marketplace.connect(buyer).increaseBidPrice(bidId, { value: additionalAmount });
+      await marketplace.connect(buyer).updateBidPrice(bidId, initialBidAmount + additionalAmount);
       
       // Verify bid price was updated
       const updatedBid = await marketplace.getBidDetails(bidId);
@@ -649,57 +667,84 @@ describe("ArchetypeMarketplace Tests", function () {
       const bidAmount = ethers.parseEther("0.5");
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: bidAmount }
+        bidAmount
       );
       
       const bidId = await marketplace.totalBids();
       
-      // Check seller and buyer balances before fulfilling
-      const sellerBalanceBefore = await ethers.provider.getBalance(seller.address);
+      // Check token ownership and balances before fulfilling
+      expect(await nft721.ownerOf(1)).to.equal(seller.address);
+      const sellerTokenBalanceBefore = await mockToken.balanceOf(seller.address);
+      const platformTokenBalanceBefore = await mockToken.balanceOf(platform.address);
+      const buyerTokenBalanceBefore = await mockToken.balanceOf(buyer.address);
       
       // Fulfill the bid with token #1
-      const tx = await marketplace.connect(seller).fulfillBid(bidId, 1);
-      const receipt = await tx.wait();
+      await marketplace.connect(seller).fulfillBid(bidId, 1);
       
-      // Calculate gas costs
-      const gasUsed = receipt?.gasUsed || BigInt(0);
-      const gasPrice = receipt?.gasPrice || BigInt(0);
-      const gasCost = gasUsed * gasPrice;
-      
-      // Check ownership transferred
+      // Check NFT ownership transferred
       expect(await nft721.ownerOf(1)).to.equal(buyer.address);
       
-      // Check seller received payment (minus fee and gas)
-      const sellerBalanceAfter = await ethers.provider.getBalance(seller.address);
+      // Check ERC20 tokens transferred correctly
       const fee = (bidAmount * BigInt(250)) / BigInt(10000); // 2.5% fee
-      const expectedSellerBalance = sellerBalanceBefore + bidAmount - fee - gasCost;
+      const sellerAmount = bidAmount - fee;
       
-      // Allow for some small rounding errors
-      const tolerance = ethers.parseEther("0.001");
-      expect(sellerBalanceAfter).to.be.closeTo(expectedSellerBalance, tolerance);
+      // Seller should receive payment
+      const sellerTokenBalanceAfter = await mockToken.balanceOf(seller.address);
+      expect(sellerTokenBalanceAfter).to.equal(sellerTokenBalanceBefore + sellerAmount);
+      
+      // Platform should receive fee
+      const platformTokenBalanceAfter = await mockToken.balanceOf(platform.address);
+      expect(platformTokenBalanceAfter).to.equal(platformTokenBalanceBefore + fee);
+      
+      // Buyer should pay the bid amount
+      const buyerTokenBalanceAfter = await mockToken.balanceOf(buyer.address);
+      expect(buyerTokenBalanceAfter).to.equal(buyerTokenBalanceBefore - bidAmount);
       
       // Check bid is no longer active
       const updatedBid = await marketplace.getBidDetails(bidId);
       expect(updatedBid.active).to.equal(false);
     });
     
+    it("should reject fulfilling a bid without sufficient ERC20 balance", async function () {
+      // Create a bid
+      const bidAmount = ethers.parseEther("0.5");
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        bidAmount
+      );
+      
+      const bidId = await marketplace.totalBids();
+      
+      // Drain buyer's ERC20 balance
+      const balance = await mockToken.balanceOf(buyer.address);
+      await mockToken.connect(buyer).transfer(unauthorizedUser.address, balance);
+      
+      // Try to fulfill the bid with token #1
+      await expect(
+        marketplace.connect(seller).fulfillBid(bidId, 1)
+      ).to.be.revertedWithCustomError(marketplace, "InsufficientBalance");
+      
+      // Return tokens to buyer for other tests
+      await mockToken.connect(unauthorizedUser).transfer(buyer.address, balance);
+    });
+    
     it("should handle collection-wide bids correctly", async function () {
       // Create multiple bids of different prices
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.2") }
+        ethers.parseEther("0.2")
       );
       const lowBidId = await marketplace.totalBids();
       
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.5") }
+        ethers.parseEther("0.5")
       );
       const highBidId = await marketplace.totalBids();
       
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.3") }
+        ethers.parseEther("0.3")
       );
       const mediumBidId = await marketplace.totalBids();
       
@@ -724,13 +769,13 @@ describe("ArchetypeMarketplace Tests", function () {
       // Create bids with different prices
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.2") }
+        ethers.parseEther("0.2")
       );
       const lowBidId = await marketplace.totalBids();
       
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.5") }
+        ethers.parseEther("0.5")
       );
       const highBidId = await marketplace.totalBids();
       
@@ -738,7 +783,7 @@ describe("ArchetypeMarketplace Tests", function () {
       expect(await marketplace.collectionHighestBidId(await nft721.getAddress())).to.equal(highBidId);
       
       // Increase the low bid to be higher than the "high" bid
-      await marketplace.connect(buyer).increaseBidPrice(lowBidId, { value: ethers.parseEther("0.4") });
+      await marketplace.connect(buyer).updateBidPrice(lowBidId, ethers.parseEther("0.6"));
       
       // Verify the order has changed
       expect(await marketplace.collectionHighestBidId(await nft721.getAddress())).to.equal(lowBidId);
@@ -755,7 +800,7 @@ describe("ArchetypeMarketplace Tests", function () {
       // Create a bid
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.5") }
+        ethers.parseEther("0.5")
       );
       
       const bidId = await marketplace.totalBids();
@@ -772,20 +817,20 @@ describe("ArchetypeMarketplace Tests", function () {
       // Create multiple bids for the same user and collection
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.2") }
+        ethers.parseEther("0.2")
       );
       const bidId1 = await marketplace.totalBids();
       
       await marketplace.connect(buyer).createBid(
         await nft721.getAddress(),
-        { value: ethers.parseEther("0.3") }
+        ethers.parseEther("0.3")
       );
       const bidId2 = await marketplace.totalBids();
       
       // Create a bid for a different collection
       await marketplace.connect(buyer).createBid(
         await nft1155.getAddress(),
-        { value: ethers.parseEther("0.4") }
+        ethers.parseEther("0.4")
       );
       
       // Get user's bids for ERC721 collection
@@ -795,6 +840,39 @@ describe("ArchetypeMarketplace Tests", function () {
       expect(userBids.length).to.equal(2);
       expect(userBids).to.include(bidId1);
       expect(userBids).to.include(bidId2);
+    });
+    
+    it("should verify balance and allowance in getAvailableCollectionBids", async function () {
+      // Create multiple bids
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        ethers.parseEther("0.5")
+      );
+      
+      await marketplace.connect(buyer).createBid(
+        await nft721.getAddress(),
+        ethers.parseEther("0.3")
+      );
+      
+      // Get available bids (should include both)
+      let [bidIds, prices, bidders] = await marketplace.getAvailableCollectionBids(
+        await nft721.getAddress(),
+        10
+      );
+      expect(bidIds.length).to.equal(2);
+      
+      // Revoke approval
+      await mockToken.connect(buyer).approve(await marketplace.getAddress(), 0);
+      
+      // Get available bids again (should be empty since approval is revoked)
+      [bidIds, prices, bidders] = await marketplace.getAvailableCollectionBids(
+        await nft721.getAddress(),
+        10
+      );
+      expect(bidIds.length).to.equal(0);
+      
+      // Restore approval for other tests
+      await mockToken.connect(buyer).approve(await marketplace.getAddress(), ethers.parseEther("10"));
     });
   });
 });

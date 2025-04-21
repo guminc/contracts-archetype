@@ -18,6 +18,7 @@ pragma solidity ^0.8.20;
 import "./ArchetypePayouts.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 
 //
@@ -41,6 +42,8 @@ error BidTooLow();
 error InvalidBid();
 error BidNotActive();
 error NoBidsFound();
+error BidTokenNotSet();
+error ERC20TransferFailed();
 
 contract ArchetypeMarketplace {
     using ERC165Checker for address;
@@ -89,6 +92,9 @@ contract ArchetypeMarketplace {
     
     uint64 public totalBids;
     mapping(uint256 => Bid) public bids;
+
+    // ERC20 token address for bids (e.g., WETH, wPOL, wDMT)
+    address public bidToken;
     
     // Track active listings per seller and token
     // Format: seller => tokenAddress => tokenId => listingId
@@ -119,7 +125,9 @@ contract ArchetypeMarketplace {
     event BidCanceled(uint64 indexed bidId);
     event BidFulfilled(uint64 indexed bidId, address indexed tokenAddress, uint256 indexed tokenId, address seller, address buyer, uint256 price);
 
-    constructor() {}
+    constructor(address _bidToken) {
+        bidToken = _bidToken;
+    }
 
     //
     // LISTING
@@ -256,8 +264,9 @@ contract ArchetypeMarketplace {
     //
     // BIDDING
     //
-    function createBid(address tokenAddress) external payable {
-        if (msg.value == 0) revert BidTooLow();
+    function createBid(address tokenAddress, uint256 amount) external {
+        if (amount == 0) revert BidTooLow();
+        if (bidToken == address(0)) revert BidTokenNotSet();
         
         // Verify token type
         TokenType tokenType;
@@ -269,12 +278,16 @@ contract ArchetypeMarketplace {
             revert UnsupportedToken();
         }
         
+        // Check bidder balance and allowance
+        if (IERC20(bidToken).balanceOf(_msgSender()) < amount) revert InsufficientBalance();
+        if (IERC20(bidToken).allowance(_msgSender(), address(this)) < amount) revert NotApproved();
+        
         // Create bid
         uint64 bidId = totalBids + 1;
         bids[bidId] = Bid({
             bidder: _msgSender(),
             tokenAddress: tokenAddress,
-            price: uint128(msg.value),
+            price: uint128(amount),
             bidId: bidId,
             active: true,
             tokenType: tokenType
@@ -288,17 +301,21 @@ contract ArchetypeMarketplace {
         
         totalBids++;
         
-        emit BidCreated(bidId, tokenAddress, _msgSender(), msg.value);
+        emit BidCreated(bidId, tokenAddress, _msgSender(), amount);
     }
     
-    function increaseBidPrice(uint64 bidId) external payable {
-        if (msg.value == 0) revert BidTooLow();
+    function updateBidPrice(uint64 bidId, uint256 price) external {
+        if (price == 0) revert BidTooLow();
         
         Bid storage bid = bids[bidId];
         if (!bid.active) revert InvalidBid();
         if (bid.bidder != _msgSender()) revert NotAuthorized();
         
-        uint256 newPrice = uint256(bid.price) + msg.value;
+        uint256 newPrice = price;
+        
+        // Check bidder balance and allowance
+        if (IERC20(bidToken).balanceOf(_msgSender()) < newPrice) revert InsufficientBalance();
+        if (IERC20(bidToken).allowance(_msgSender(), address(this)) < newPrice) revert NotApproved();
         
         _removeFromCollectionBidList(bidId, bid.tokenAddress);
         
@@ -317,9 +334,6 @@ contract ArchetypeMarketplace {
         _removeFromCollectionBidList(bidId, bid.tokenAddress);
         bid.active = false;
         
-        // Return funds to bidder
-        (bool success, ) = payable(bid.bidder).call{value: bid.price}("");
-        if (!success) revert TransferFailed();
         
         emit BidCanceled(bidId);
     }
@@ -338,6 +352,11 @@ contract ArchetypeMarketplace {
             if (!IERC1155(bid.tokenAddress).isApprovedForAll(_msgSender(), address(this))) revert NotApproved();
         }
         
+        // Check if bidder still has sufficient balance and allowance
+        if (IERC20(bidToken).balanceOf(bid.bidder) < bid.price) revert InsufficientBalance();
+        if (IERC20(bidToken).allowance(bid.bidder, address(this)) < bid.price) revert NotApproved();
+        
+        // Process the bid fulfillment
         _processFulfillBid(bidId, tokenId, bid);
     }
     
@@ -465,23 +484,24 @@ contract ArchetypeMarketplace {
         
         bid.active = false;
         
-        // Transfer token to bidder
+        // Transfer NFT to bidder
         if (bid.tokenType == TokenType.ERC721) {
             IERC721(bid.tokenAddress).safeTransferFrom(_msgSender(), bid.bidder, tokenId);
         } else if (bid.tokenType == TokenType.ERC1155) {
             IERC1155(bid.tokenAddress).safeTransferFrom(_msgSender(), bid.bidder, tokenId, 1, "");
         }
         
-        // Pay platform fee
-        _payPlatform(fee);
+        // Pay platform fee directly to PLATFORM address
+        bool platformTransferSuccess = IERC20(bidToken).transferFrom(bid.bidder, PLATFORM, fee);
+        if (!platformTransferSuccess) revert ERC20TransferFailed();
         
-        // Pay seller
-        (bool sellerTransferSuccess, ) = payable(_msgSender()).call{value: sellerAmount}("");
-        if (!sellerTransferSuccess) revert TransferFailed();
+        // Pay seller directly from bidder to seller
+        bool sellerTransferSuccess = IERC20(bidToken).transferFrom(bid.bidder, _msgSender(), sellerAmount);
+        if (!sellerTransferSuccess) revert ERC20TransferFailed();
         
         emit BidFulfilled(bidId, bid.tokenAddress, tokenId, _msgSender(), bid.bidder, bid.price);
     }
-    
+
     function _findFirstActiveAndValidListing(
         uint64 startListingId, 
         mapping(uint64 => uint64) storage nextListingMapping
@@ -644,10 +664,15 @@ contract ArchetypeMarketplace {
         while (currentBidId != 0 && foundCount < count) {
             Bid storage bid = bids[currentBidId];
             if (bid.active) {
-                bidIds[foundCount] = currentBidId;
-                prices[foundCount] = bid.price;
-                bidders[foundCount] = bid.bidder;
-                foundCount++;
+                // Check if bidder still has sufficient balance and allowance
+                bool hasBalance = IERC20(bidToken).balanceOf(bid.bidder) >= bid.price;
+                bool hasAllowance = IERC20(bidToken).allowance(bid.bidder, address(this)) >= bid.price; 
+                if (hasBalance && hasAllowance) {
+                    bidIds[foundCount] = currentBidId;
+                    prices[foundCount] = bid.price;
+                    bidders[foundCount] = bid.bidder;
+                    foundCount++;
+                }
             }
             
             currentBidId = nextMapping[currentBidId];
