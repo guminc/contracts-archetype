@@ -429,7 +429,8 @@ library ArchetypeLogicErc721a {
           revert TransferFailed();
         }
       } else {
-        IERC20 erc20Token = IERC20(tokenAddress);
+        IERC20 erc20Token = IERC20(tokenAddress)
+        // todo: update erc20 transfers to use safe transfer for usdt case
         bool success = erc20Token.transfer(msgSender, wad);
         if (!success) {
           revert TransferFailed();
@@ -468,6 +469,7 @@ library ArchetypeLogicErc721a {
         revert BalanceEmpty();
       }
 
+      // todo: update to this flow always
       if (payoutConfig.ownerAltPayout == address(0)) {
         address[] memory recipients = new address[](4);
         recipients[0] = owner;
