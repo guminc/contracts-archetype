@@ -68,3 +68,18 @@ fs.writeFileSync(
   originalBurgers404File
 );
 replaceConstants(brg404RandomContractPath);
+
+
+const marketplaceContractPath = path.resolve(
+  __dirname,
+  "../contracts/ArchetypeMarketplace.sol"
+);
+const originalMarketplaceFile = fs.readFileSync(
+  marketplaceContractPath,
+  "utf8"
+);
+fs.writeFileSync(
+  "./contracts/ArchetypeMarketplace.sol.bak",
+  originalMarketplaceFile
+);
+replaceConstants(marketplaceContractPath);
