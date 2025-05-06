@@ -586,17 +586,14 @@ describe("FactoryErc721a", function () {
     // expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0")));
 
     // withdraw owner balance
+    let balance = await ethers.provider.getBalance(owner.address);
+
     await nft.connect(owner).withdraw();
-    await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.parseEther("0.0646")
-    );
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
       ethers.parseEther("0.0034")
     );
 
-    // withdraw owner from split contract
-    let balance = await ethers.provider.getBalance(owner.address);
-    await archetypePayouts.connect(owner).withdraw();
+    // check diff
     let diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.064"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
@@ -621,17 +618,13 @@ describe("FactoryErc721a", function () {
       ethers.parseEther("0.024")
     ); // 15% x 2 mints
 
+    balance = await ethers.provider.getBalance(owner.address);
     await nft.connect(platform).withdraw();
-    await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.parseEther("0.0646")
-    );
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
       ethers.parseEther("0.0068") // accumulated from last withdraw to split
     );
 
-    // withdraw owner balance again
-    balance = await ethers.provider.getBalance(owner.address);
-    await archetypePayouts.connect(owner).withdraw();
+    // check owner balance again
     diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.064"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
@@ -875,12 +868,10 @@ describe("FactoryErc721a", function () {
       ethers.parseEther("0.015")
     ); // 15%
 
-    // withdraw to split
+    // withdraw to owner
+    let balance = await ethers.provider.getBalance(owner.address);
     await nft.connect(owner).withdraw();
 
-    await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.parseEther("0.0765")
-    ); // 90%
     await expect(
       await archetypePayouts.balance(superAffiliate.address)
     ).to.equal(ethers.parseEther("0.00425")); // 5%
@@ -889,8 +880,6 @@ describe("FactoryErc721a", function () {
     ); // 5%
 
     // withdraw owner balance
-    let balance = await ethers.provider.getBalance(owner.address);
-    await archetypePayouts.connect(owner).withdraw();
     let diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.076"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.078")));
@@ -1942,10 +1931,7 @@ describe("FactoryErc721a", function () {
     await nft.connect(owner).withdrawTokens([await erc20.getAddress()]);
     await expect(
       await erc20.balanceOf(await archetypePayouts.getAddress())
-    ).to.be.equal(ethers.parseEther("3"));
-    await archetypePayouts
-      .connect(owner)
-      .withdrawTokens([await erc20.getAddress()]);
+    ).to.be.equal(ethers.parseEther("0.15"));
     await expect(
       await erc20.balanceOf(await archetypePayouts.getAddress())
     ).to.be.equal(ethers.parseEther("0.15"));
@@ -2852,7 +2838,7 @@ describe("FactoryErc721a", function () {
   });
 
   it("test payouts approval functionality", async () => {
-    const [accountZero, accountOne] = await ethers.getSigners();
+    const [accountZero, accountOne, platform] = await ethers.getSigners();
 
     const owner = accountOne;
     const ownerAlt = accountZero;
@@ -2895,20 +2881,14 @@ describe("FactoryErc721a", function () {
     // cant withdraw from other persons account
     await expect(
       archetypePayouts
-        .connect(ownerAlt)
-        .withdrawFrom(owner.address, ownerAlt.address)
-    ).to.be.revertedWithCustomError(archetypePayouts, "NotApprovedToWithdraw");
-
-    await expect(
-      archetypePayouts
-        .connect(ownerAlt)
-        .withdrawTokensFrom(owner.address, ownerAlt.address, [ZERO])
+        .connect(owner)
+        .withdrawFrom(platform.address, ownerAlt.address)
     ).to.be.revertedWithCustomError(archetypePayouts, "NotApprovedToWithdraw");
 
     // can withdraw from own account to another address
     await archetypePayouts
-      .connect(owner)
-      .withdrawFrom(owner.address, ownerAlt.address);
+      .connect(platform)
+      .withdrawFrom(platform.address, ownerAlt.address);
 
     await nft
       .connect(accountOne)
@@ -2921,15 +2901,15 @@ describe("FactoryErc721a", function () {
 
     // can withdraw from other persons account when approved
     await archetypePayouts
-      .connect(owner)
+      .connect(platform)
       .approveWithdrawal(ownerAlt.address, true);
-    archetypePayouts
+    await archetypePayouts
       .connect(ownerAlt)
-      .withdrawFrom(owner.address, ownerAlt.address);
+      .withdrawFrom(platform.address, ownerAlt.address);
     await expect(
       archetypePayouts
         .connect(ownerAlt)
-        .withdrawTokensFrom(owner.address, ownerAlt.address, [ZERO])
+        .withdrawTokensFrom(platform.address, ownerAlt.address, [ZERO])
     ).to.be.revertedWithCustomError(archetypeLogic, "BalanceEmpty");
   });
 
