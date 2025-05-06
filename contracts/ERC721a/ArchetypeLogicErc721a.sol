@@ -17,9 +17,11 @@ pragma solidity ^0.8.20;
 
 import "../ArchetypePayouts.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "solady/src/utils/MerkleProofLib.sol";
 import "solady/src/utils/ECDSA.sol";
+
+using SafeERC20 for IERC20;
 
 error InvalidConfig();
 error MintNotYetStarted();
@@ -400,10 +402,7 @@ library ArchetypeLogicErc721a {
 
     if (tokenAddress != address(0)) {
       IERC20 erc20Token = IERC20(tokenAddress);
-      bool success = erc20Token.transferFrom(_msgSender(), address(this), value);
-      if (!success) {
-        revert TransferFailed();
-      }
+      erc20Token.safeTransferFrom(_msgSender(), address(this), value);
     }
   }
 
@@ -430,11 +429,7 @@ library ArchetypeLogicErc721a {
         }
       } else {
         IERC20 erc20Token = IERC20(tokenAddress);
-        // todo: update erc20 transfers to use safe transfer for usdt case
-        bool success = erc20Token.transfer(msgSender, wad);
-        if (!success) {
-          revert TransferFailed();
-        }
+        erc20Token.safeTransfer(msgSender, wad);
       }
 
       emit Withdrawal(msgSender, tokenAddress, wad);
@@ -480,7 +475,7 @@ library ArchetypeLogicErc721a {
         (bool success, ) = payable(ownerPayout).call{ value: ownerShare }("");
         if (!success) revert TransferFailed();
       } else {
-        IERC20(tokenAddress).transfer(ownerPayout, ownerShare);
+        IERC20(tokenAddress).safeTransfer(ownerPayout, ownerShare);
       }
 
       address[] memory recipients = new address[](3);
