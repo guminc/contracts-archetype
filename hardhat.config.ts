@@ -62,6 +62,16 @@ const config: HardhatUserConfig = {
       accounts: [privateKey],
       chainId: 80084,
     },
+    berachain_mainnet: {
+      url: "https://rpc.berachain.com",
+      accounts: [privateKey],
+      chainId: 80094,
+    },
+    sophon_mainnet: {
+      url: "https://rpc.sophon.xyz",
+      accounts: [privateKey],
+      chainId: 50104,
+    },
     sanko_mainnet: {
       accounts: [privateKey],
       url: "https://mainnet.sanko.xyz",
@@ -159,6 +169,8 @@ const config: HardhatUserConfig = {
       polygon_mainnet: process.env.POLYSCAN_API_KEY || "",
       sanko_mainnet: "abc",
       berachain_bartio: "abc",
+      berachain_mainnet: "abc",
+      sophon_mainnet: "abc",
       soneium_minato: "abc",
       apechain_mainnet: "533JYG2IWFR2YA8RS7WR5NA9W8I79XATPU",
       soneium_mainnet: "abc",
@@ -198,6 +210,24 @@ const config: HardhatUserConfig = {
           apiURL:
             "https://api.routescan.io/v2/network/testnet/evm/80084/etherscan",
           browserURL: "https://bartio.beratrail.io",
+        },
+      },
+      {
+        network: "berachain_mainnet",
+        chainId: 80094,
+        urls: {
+          apiURL:
+            "https://api.berascan.com/api",
+          browserURL: "https://berascan.com/",
+        },
+      },
+      {
+        network: "sophon_mainnet",
+        chainId: 50104,
+        urls: {
+          apiURL:
+            "https://api-explorer.sophon.xyz/api",
+          browserURL: "explorer.sophon.xyz",
         },
       },
       {
