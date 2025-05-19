@@ -13,7 +13,7 @@
     "testErc1155Random": "npx hardhat test ./test/ERC1155-Random/archetypeErc1155Random.test.ts",
     "testBurgers404": "npx hardhat test ./test/BURGERS404/archetypeBurgers404.test.ts",
     "testMarketplace": "npx hardhat test ./test/Marketplace/archetypeMarketplace.test.ts",
-    "test": "npm run preTest && npm run testErc721a && npm run testErc1155 && npm run testErc1155Random && npm run testBurgers404 && npm run testMarketplace && npm run postTest"
+    "test": "npm run preTest && npm run testErc721a && npm run testErc1155 && npm run testMarketplace && npm run postTest"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.7.0",

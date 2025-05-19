@@ -70,7 +70,7 @@ describe("ArchetypeMarketplace Tests", function () {
       },
     });
     
-    const tokenContract = ArchetypeErc721a.attach(newCollectionAddress721);
+    const tokenContract = asContractType<ArchetypeErc721a>(ArchetypeErc721a.attach(newCollectionAddress721));
     
     // Setup invite for minting
     await tokenContract.connect(seller).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
@@ -104,7 +104,7 @@ describe("ArchetypeMarketplace Tests", function () {
       },
     });
     
-    const tokenContract = ArchetypeErc1155.attach(newCollectionAddress1155);
+    const tokenContract = asContractType<ArchetypeErc1155>(ArchetypeErc1155.attach(newCollectionAddress1155));
     
     // Setup invite for minting
     await tokenContract.connect(seller).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
@@ -121,14 +121,22 @@ describe("ArchetypeMarketplace Tests", function () {
     return tokenContract;
   }
   
-  async function mintNFT721(tokenContract, count) {
-    await tokenContract.connect(seller).mint(
-      { key: ethers.ZeroHash, proof: [] },
-      count,
-      ZERO,
-      "0x",
-      { value: ethers.parseEther((0.01 * count).toString()) }
-    );
+  async function mintNFT721(tokenContract, totalCount) {
+    const batchSize = 10;
+    const numBatches = Math.ceil(totalCount / batchSize);
+        
+    for (let i = 0; i < numBatches; i++) {
+      const remainingCount = totalCount - i * batchSize;
+      const currentBatchSize = Math.min(remainingCount, batchSize);
+            
+      await tokenContract.connect(seller).mint(
+        { key: ethers.ZeroHash, proof: [] },
+        currentBatchSize,
+        ZERO,
+        "0x",
+        { value: ethers.parseEther((0.01 * currentBatchSize).toString()) }
+      );      
+    }    
   }
   
   async function mintNFT1155(tokenContract, tokenId, amount) {
@@ -151,7 +159,7 @@ describe("ArchetypeMarketplace Tests", function () {
       baseUri: "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
       affiliateSigner: AFFILIATE_SIGNER.address,
       maxSupply: 5000,
-      maxBatchSize: 20,
+      maxBatchSize: 5000,
       affiliateFee: 1500,
       affiliateDiscount: 0,
       defaultRoyalty: 500,
@@ -161,7 +169,7 @@ describe("ArchetypeMarketplace Tests", function () {
       baseUri: "ipfs://bafkreieqcdphcfojcd2vslsxrhzrjqr6cxjlyuekpghzehfexi5c3w55eq",
       affiliateSigner: AFFILIATE_SIGNER.address,
       maxSupply: [1000, 1000, 1000, 1000, 1000],
-      maxBatchSize: 20,
+      maxBatchSize: 5000,
       affiliateFee: 1500,
       affiliateDiscount: 0,
       defaultRoyalty: 500,
@@ -873,6 +881,429 @@ describe("ArchetypeMarketplace Tests", function () {
       
       // Restore approval for other tests
       await mockToken.connect(buyer).approve(await marketplace.getAddress(), ethers.parseEther("10"));
+    });
+  });
+
+  describe("Large Scale Performance", function () {
+    // Increase timeout for this test group
+    this.timeout(300000); // 5 minutes
+    
+    beforeEach(async function () {
+      // Create fresh NFT collection with larger supply
+      nft721 = await createNFT721Collection();
+      
+      // Mint many tokens for testing
+      await mintNFT721(nft721, 2000);
+      
+      // Approve marketplace to transfer NFTs
+      await nft721.connect(seller).setApprovalForAll(await marketplace.getAddress(), true);
+    });
+    
+    it("should handle 1000+ listings with proper linked list management", async function () {
+      const NUM_LISTINGS = 1000;
+      const tokenIds = [];
+      const listingIds = [];
+      
+      // Create token IDs - we need unique ones to avoid duplicate listings
+      for (let i = 1; i <= NUM_LISTINGS; i++) {
+        tokenIds.push(i);
+      }
+      
+      console.log("Creating 1000 listings...");
+      
+      // Create listings with varying prices, weighted toward lower prices
+      // This creates a more realistic distribution
+      for (let i = 0; i < NUM_LISTINGS; i++) {
+        // Generate random price between 0.001 ETH and 1 ETH
+        // With exponential distribution to create more realistic market conditions
+        // (many lower prices, fewer higher prices)
+        const randomExponent = Math.random() * 3; // Between 0 and 3
+        const price = ethers.parseEther((0.001 + 0.999 * Math.pow(2, -randomExponent)).toFixed(6).toString());
+        
+        // Create listing
+        await marketplace.connect(seller).listItem(
+          await nft721.getAddress(),
+          tokenIds[i],
+          price
+        );
+        
+        listingIds.push(await marketplace.totalListings());
+      }
+      
+      console.log("All listings created, verifying linked list...");
+      
+      // Get the first few (lowest priced) listings
+      const [listedIds, prices, tokenIdResults, sellers] = await marketplace.getAvailableCollectionListings(
+        await nft721.getAddress(),
+        10
+      );
+      
+      // Verify prices are ordered correctly (ascending)
+      for (let i = 0; i < prices.length - 1; i++) {
+        expect(prices[i]).to.be.lessThanOrEqual(prices[i + 1]);
+      }
+      
+      // Test traversing entire linked list
+      let currentId = await marketplace.collectionLowestPriceListingId(await nft721.getAddress());
+      let count = 0;
+      let previousPrice = BigInt(0);
+      
+      // Traverse the entire linked list to verify all 1000 listings are accessible
+      while (currentId != 0 && count < NUM_LISTINGS + 10) { // +10 for safety
+        const listing = await marketplace.listings(currentId);
+        
+        // Verify price ordering is maintained
+        expect(listing.price).to.be.greaterThanOrEqual(previousPrice);
+        previousPrice = listing.price;
+        
+        // Move to next listing
+        currentId = await marketplace.nextLowestCollectionListing(
+          await nft721.getAddress(),
+          currentId
+        );
+        
+        count++;
+      }
+      
+      // Verify we found all listings
+      expect(count).to.equal(NUM_LISTINGS);
+      
+      console.log("Linked list verified with all listings in correct order");
+      
+      // Test performance of lowest price operations
+      console.log("Testing lowest price operations...");
+      
+      // Buy the 5 lowest priced items
+      for (let i = 0; i < 5; i++) {
+        await marketplace.connect(buyer).buyLowestPricedCollectionItem(
+          await nft721.getAddress(),
+          { value: ethers.parseEther("1.0") } // Send enough to cover any price
+        );
+      }
+      
+      // Verify linked list is still intact after removals
+      const [updatedListingIds, updatedPrices, updatedTokenIds, updatedSellers] = 
+        await marketplace.getAvailableCollectionListings(
+          await nft721.getAddress(),
+          10
+        );
+      
+      // Verify prices are still in ascending order
+      for (let i = 0; i < updatedPrices.length - 1; i++) {
+        expect(updatedPrices[i]).to.be.lessThanOrEqual(updatedPrices[i + 1]);
+      }
+      
+      // Count remaining active listings
+      let remainingListings = 0;
+      let lowestId = await marketplace.collectionLowestPriceListingId(await nft721.getAddress());
+      
+      while (lowestId != 0) {
+        remainingListings++;
+        lowestId = await marketplace.nextLowestCollectionListing(
+          await nft721.getAddress(),
+          lowestId
+        );
+      }
+      
+      // Should have 5 fewer listings now
+      expect(remainingListings).to.equal(NUM_LISTINGS - 5);
+      
+      console.log("Testing large-scale price updates...");
+      
+      // Update prices for many listings
+      const UPDATES_COUNT = 100;
+      
+      // Get 100 random listing IDs to update
+      const listingsToUpdate = [];
+      for (let i = 0; i < UPDATES_COUNT; i++) {
+        const randomIndex = Math.floor(Math.random() * listingIds.length);
+        listingsToUpdate.push(listingIds[randomIndex]);
+      }
+      
+      // Update prices 
+      for (let i = 0; i < UPDATES_COUNT; i++) {
+        const listingId = listingsToUpdate[i];
+        
+        // Get current listing
+        const listing = await marketplace.listings(listingId);
+        
+        // Skip inactive listings
+        if (!listing.active) continue;
+        
+        // Update to a random new price - either higher or lower
+        const multiplier = 0.5 + Math.random() * 1.5; // Between 0.5x and 2x original price
+        const newPrice = BigInt(Math.floor(Number(listing.price) * multiplier));
+        
+        // Ensure min price of 0.001 ETH
+        const minPrice = ethers.parseEther("0.001"); 
+        const adjustedPrice = newPrice < minPrice ? minPrice : newPrice;
+        
+        await marketplace.connect(seller).updateListingPrice(listingId, adjustedPrice);
+      }
+      
+      // Verify linked list integrity after updates
+      const [finalListingIds, finalPrices, finalTokenIds, finalSellers] = 
+        await marketplace.getAvailableCollectionListings(
+          await nft721.getAddress(),
+          10
+        );
+      
+      // Verify prices are still in ascending order
+      for (let i = 0; i < finalPrices.length - 1; i++) {
+        expect(finalPrices[i]).to.be.lessThanOrEqual(finalPrices[i + 1]);
+      }
+      
+      console.log("Testing batch cancellations...");
+      
+      // Cancel some listings
+      const CANCEL_COUNT = 50;
+      let successfulCancellations = 0;
+      
+      for (let i = 0; i < CANCEL_COUNT; i++) {
+        const randomIndex = Math.floor(Math.random() * listingIds.length);
+        const listingId = listingIds[randomIndex];
+        
+        // Get listing to check if it's active
+        const listing = await marketplace.listings(listingId);
+        if (listing.active) {
+          await marketplace.connect(seller).cancelListing(listingId);
+          successfulCancellations++;
+        }
+      }
+      
+      console.log("Testing batch purchases...");
+      
+      // Buy more listings
+      const PURCHASE_COUNT = 20;
+      let successfulPurchases = 0;
+      
+      for (let i = 0; i < PURCHASE_COUNT; i++) {
+        try {
+          await marketplace.connect(buyer).buyLowestPricedCollectionItem(
+            await nft721.getAddress(),
+            { value: ethers.parseEther("1.0") }
+          );
+          successfulPurchases++;
+        } catch (e) {
+          // If we run out of listings, that's fine
+          if (e.message.includes("NoActiveListings")) {
+            break;
+          } else {
+            throw e;
+          }
+        }
+      }
+      
+      console.log(`Completed ${successfulCancellations} cancellations and ${successfulPurchases} purchases`);
+      
+      // Verify final linked list state
+      let finalCount = 0;
+      lowestId = await marketplace.collectionLowestPriceListingId(await nft721.getAddress());
+      
+      let previousFinalPrice = BigInt(0);
+      while (lowestId != 0) {
+        finalCount++;
+        
+        // Check price order is maintained
+        const currentListing = await marketplace.listings(lowestId);
+        expect(currentListing.price).to.be.greaterThanOrEqual(previousFinalPrice);
+        previousFinalPrice = currentListing.price;
+        
+        lowestId = await marketplace.nextLowestCollectionListing(
+          await nft721.getAddress(),
+          lowestId
+        );
+      }
+      
+      // Verify expected number of active listings
+      // Should be original - 5 (first batch buys) - successful purchases - successful cancellations
+      expect(finalCount).to.equal(NUM_LISTINGS - 5 - successfulPurchases - successfulCancellations);
+      
+      console.log("Large scale test completed successfully");
+    });
+    
+    it("should handle 1000+ bids with proper linked list management", async function () {
+      const NUM_BIDS = 1000;
+      const bidIds = [];
+      
+      // Mint more tokens to buyer for testing many bids
+      await mockToken.connect(buyer).mint(ethers.parseEther("1000"));
+      
+      // Approve marketplace to transfer a lot of tokens
+      await mockToken.connect(buyer).approve(await marketplace.getAddress(), ethers.parseEther("1000"));
+      
+      console.log("Creating 1000 bids...");
+      
+      // Create bids with varying prices
+      for (let i = 0; i < NUM_BIDS; i++) {
+        // Generate random price between 0.001 ETH and 1 ETH
+        // With exponential distribution
+        const randomExponent = Math.random() * 3; // Between 0 and 3
+        const price = ethers.parseEther((0.001 + 0.999 * Math.pow(2, -randomExponent)).toFixed(6).toString());
+        
+        // Create bid
+        await marketplace.connect(buyer).createBid(
+          await nft721.getAddress(),
+          price
+        );
+        
+        bidIds.push(await marketplace.totalBids());
+      }
+      
+      console.log("All bids created, verifying linked list...");
+      
+      // Get the first few (highest) bids
+      const [listedBidIds, bidPrices, bidders] = await marketplace.getAvailableCollectionBids(
+        await nft721.getAddress(),
+        10
+      );
+      
+      // Verify prices are ordered correctly (descending)
+      for (let i = 0; i < bidPrices.length - 1; i++) {
+        expect(bidPrices[i]).to.be.greaterThanOrEqual(bidPrices[i + 1]);
+      }
+      
+      // Test traversing entire bid linked list
+      let currentBidId = await marketplace.collectionHighestBidId(await nft721.getAddress());
+      let count = 0;
+      let previousBidPrice = ethers.MaxUint256; // Start with max value as we're going down
+      
+      // Traverse the entire linked list to verify all 1000 bids are accessible
+      while (currentBidId != 0 && count < NUM_BIDS + 10) { 
+        const bid = await marketplace.bids(currentBidId);
+        
+        // Verify price ordering is maintained (descending)
+        expect(previousBidPrice).to.be.greaterThanOrEqual(bid.price);
+        previousBidPrice = bid.price;
+        
+        // Move to next bid
+        currentBidId = await marketplace.nextHighestCollectionBid(
+          await nft721.getAddress(),
+          currentBidId
+        );
+        
+        count++;
+      }
+      
+      // Verify we found all bids
+      expect(count).to.equal(NUM_BIDS);
+      
+      console.log("Bid linked list verified with all bids in correct order");
+      
+      console.log("Testing large-scale bid updates...");
+      
+      // Update prices for many bids
+      const UPDATES_COUNT = 100;
+      
+      // Get 100 random bid IDs to update
+      const bidsToUpdate = [];
+      for (let i = 0; i < UPDATES_COUNT; i++) {
+        const randomIndex = Math.floor(Math.random() * bidIds.length);
+        bidsToUpdate.push(bidIds[randomIndex]);
+      }
+      
+      // Update bid prices 
+      for (let i = 0; i < UPDATES_COUNT; i++) {
+        const bidId = bidsToUpdate[i];
+        
+        // Get current bid
+        const bid = await marketplace.bids(bidId);
+        
+        // Skip inactive bids
+        if (!bid.active) continue;
+        
+        // Update to a random new price - either higher or lower
+        const multiplier = 0.5 + Math.random() * 1.5; // Between 0.5x and 2x original price
+        const newPrice = BigInt(Math.floor(Number(bid.price) * multiplier));
+        
+        // Ensure min price of 0.001 ETH
+        const minPrice = ethers.parseEther("0.001"); 
+        const adjustedPrice = newPrice < minPrice ? minPrice : newPrice;
+        
+        await marketplace.connect(buyer).updateBidPrice(bidId, adjustedPrice);
+      }
+      
+      // Verify bid linked list integrity after updates
+      const [updatedBidIds, updatedBidPrices, updatedBidders] = 
+        await marketplace.getAvailableCollectionBids(
+          await nft721.getAddress(),
+          10
+        );
+      
+      // Verify prices are still in descending order
+      for (let i = 0; i < updatedBidPrices.length - 1; i++) {
+        expect(updatedBidPrices[i]).to.be.greaterThanOrEqual(updatedBidPrices[i + 1]);
+      }
+      
+      console.log("Testing batch bid cancellations...");
+      
+      // Cancel some bids
+      const CANCEL_COUNT = 50;
+      let successfulBidCancellations = 0;
+      
+      for (let i = 0; i < CANCEL_COUNT; i++) {
+        const randomIndex = Math.floor(Math.random() * bidIds.length);
+        const bidId = bidIds[randomIndex];
+        
+        // Get bid to check if it's active
+        const bid = await marketplace.bids(bidId);
+        if (bid.active) {
+          await marketplace.connect(buyer).cancelBid(bidId);
+          successfulBidCancellations++;
+        }
+      }
+      
+      console.log("Testing bid fulfillments...");
+      
+      // Fulfill some bids
+      const FULFILL_COUNT = 10;
+      let successfulBidFulfillments = 0;
+      
+      for (let i = 0; i < FULFILL_COUNT; i++) {
+        // Use higher token IDs to avoid conflicts with buying
+        const tokenId = 1000 + i;
+        
+        // Check if there are any valid bids to fulfill
+        try {
+          await marketplace.connect(seller).fulfillHighestCollectionBid(await nft721.getAddress(), tokenId);
+          successfulBidFulfillments++;
+        } catch (e) {
+          // If no bids found or other error, break the loop
+          if (e.message.includes("NoBidsFound")) {
+            console.log("No more valid bids to fulfill");
+            break;
+          }
+          // For other errors, log and continue
+          console.log(`Error fulfilling bid: ${e.message}`);
+          break;
+        }
+      }
+      
+      console.log(`Completed ${successfulBidCancellations} bid cancellations and ${successfulBidFulfillments} bid fulfillments`);
+      
+      // Verify final bid linked list state
+      let finalBidCount = 0;
+      let highestBidId = await marketplace.collectionHighestBidId(await nft721.getAddress());
+      
+      let previousHighPrice = ethers.MaxUint256;
+      while (highestBidId != 0) {
+        finalBidCount++;
+        
+        // Check bid price order is maintained (descending)
+        const currentBid = await marketplace.bids(highestBidId);
+        expect(previousHighPrice).to.be.greaterThanOrEqual(currentBid.price);
+        previousHighPrice = currentBid.price;
+        
+        highestBidId = await marketplace.nextHighestCollectionBid(
+          await nft721.getAddress(),
+          highestBidId
+        );
+      }
+      
+      // Verify expected number of active bids
+      expect(finalBidCount).to.equal(NUM_BIDS - successfulBidCancellations - successfulBidFulfillments);
+      
+      console.log("Large scale bid test completed successfully");
     });
   });
 });

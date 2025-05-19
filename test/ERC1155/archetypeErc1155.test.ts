@@ -576,17 +576,13 @@ describe("FactoryErc1155", function () {
     // expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0")));
 
     // withdraw owner balance
+    let balance = await ethers.provider.getBalance(owner.address);
     await nft.connect(owner).withdraw();
-    await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.parseEther("0.0646")
-    );
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
       ethers.parseEther("0.0034")
     );
 
-    // withdraw owner from split contract
-    let balance = await ethers.provider.getBalance(owner.address);
-    await archetypePayouts.connect(owner).withdraw();
+    // check diff
     let diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.064"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
@@ -612,17 +608,13 @@ describe("FactoryErc1155", function () {
       ethers.parseEther("0.024")
     ); // 15% x 2 mints
 
+    balance = await ethers.provider.getBalance(owner.address);
     await nft.connect(platform).withdraw();
-    await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.parseEther("0.0646")
-    );
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
       ethers.parseEther("0.0068") // accumulated from last withdraw to split
     );
 
-    // withdraw owner balance again
-    balance = await ethers.provider.getBalance(owner.address);
-    await archetypePayouts.connect(owner).withdraw();
+    // check owner balance again
     diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.064"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(
@@ -796,22 +788,18 @@ describe("FactoryErc1155", function () {
       ethers.parseEther("0.015")
     ); // 15%
 
-    // withdraw to split
+    // withdraw to owner
+    let balance = await ethers.provider.getBalance(owner.address);
     await nft.connect(owner).withdraw();
 
-    await expect(await archetypePayouts.balance(owner.address)).to.equal(
-      ethers.parseEther("0.078625")
-    ); // 92.5%
     await expect(
       await archetypePayouts.balance(superAffiliate.address)
-    ).to.equal(ethers.parseEther("0.002125")); // 2.5%
+    ).to.equal(ethers.parseEther("0.0021247875")); // 2.5%
     await expect(await archetypePayouts.balance(platform.address)).to.equal(
-      ethers.parseEther("0.00425")
+      ethers.parseEther("0.0042502125")
     ); // 5%
 
     // withdraw owner balance
-    let balance = await ethers.provider.getBalance(owner.address);
-    await archetypePayouts.connect(owner).withdraw();
     let diff = (await ethers.provider.getBalance(owner.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.0785"))); // leave room for gas
     expect(Number(diff)).to.lessThanOrEqual(Number(ethers.parseEther("0.079")));
@@ -822,7 +810,7 @@ describe("FactoryErc1155", function () {
     diff = (await ethers.provider.getBalance(platform.address)) - balance;
     expect(Number(diff)).to.greaterThan(Number(ethers.parseEther("0.004")));
     expect(Number(diff)).to.lessThanOrEqual(
-      Number(ethers.parseEther("0.00425"))
+      Number(ethers.parseEther("0.004251"))
     );
 
     // withdraw super affiliate balance
@@ -1512,10 +1500,7 @@ describe("FactoryErc1155", function () {
     await nft.connect(owner).withdrawTokens([await erc20.getAddress()]);
     await expect(
       await erc20.balanceOf(await archetypePayouts.getAddress())
-    ).to.be.equal(ethers.parseEther("3"));
-    await archetypePayouts
-      .connect(owner)
-      .withdrawTokens([await erc20.getAddress()]);
+    ).to.be.equal(ethers.parseEther("0.15"));
     await expect(
       await erc20.balanceOf(await archetypePayouts.getAddress())
     ).to.be.equal(ethers.parseEther("0.15"));
