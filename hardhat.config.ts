@@ -72,6 +72,11 @@ const config: HardhatUserConfig = {
       accounts: [privateKey],
       chainId: 50104,
     },
+    hyperliquid_mainnet: {
+      url: "https://rpc.hyperliquid.xyz/evm",
+      accounts: [privateKey],
+      chainId: 999,
+    },
     sanko_mainnet: {
       accounts: [privateKey],
       url: "https://mainnet.sanko.xyz",
@@ -169,7 +174,7 @@ const config: HardhatUserConfig = {
       polygon_mainnet: process.env.POLYSCAN_API_KEY || "",
       sanko_mainnet: "abc",
       berachain_bartio: "abc",
-      berachain_mainnet: "abc",
+      berachain_mainnet: "H2F6DTQZ399PQKSVVQRBD8FSKJJMNEV8S3",
       sophon_mainnet: "abc",
       soneium_minato: "abc",
       apechain_mainnet: "533JYG2IWFR2YA8RS7WR5NA9W8I79XATPU",
@@ -224,6 +229,15 @@ const config: HardhatUserConfig = {
       {
         network: "sophon_mainnet",
         chainId: 50104,
+        urls: {
+          apiURL:
+            "https://api-explorer.sophon.xyz/api",
+          browserURL: "explorer.sophon.xyz",
+        },
+      },
+      {
+        network: "hyperliquid_mainnet",
+        chainId: 999,
         urls: {
           apiURL:
             "https://api-explorer.sophon.xyz/api",

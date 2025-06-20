@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ArchetypeLogic v0.8.1 - ERC1155-random
+// ArchetypeLogic v0.8.1 - ERC1155
 //
 //        d8888                 888               888
 //       d88888                 888               888
