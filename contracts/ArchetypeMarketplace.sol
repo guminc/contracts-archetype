@@ -18,8 +18,10 @@ pragma solidity ^0.8.20;
 import "./ArchetypePayouts.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
+
+using SafeERC20 for IERC20;
 
 //
 // ERRORS
@@ -492,12 +494,10 @@ contract ArchetypeMarketplace {
         }
         
         // Pay platform fee directly to PLATFORM address
-        bool platformTransferSuccess = IERC20(bidToken).transferFrom(bid.bidder, PLATFORM, fee);
-        if (!platformTransferSuccess) revert ERC20TransferFailed();
+        IERC20(bidToken).safeTransferFrom(bid.bidder, PLATFORM, fee);
         
         // Pay seller directly from bidder to seller
-        bool sellerTransferSuccess = IERC20(bidToken).transferFrom(bid.bidder, _msgSender(), sellerAmount);
-        if (!sellerTransferSuccess) revert ERC20TransferFailed();
+        IERC20(bidToken).safeTransferFrom(bid.bidder, _msgSender(), sellerAmount);
         
         emit BidFulfilled(bidId, bid.tokenAddress, tokenId, _msgSender(), bid.bidder, bid.price);
     }
