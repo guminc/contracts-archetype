@@ -99,7 +99,7 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
     address affiliate,
     bytes calldata signature
   ) external payable {
-    mintTo(auth, quantity, msg.sender, tokenId, affiliate, signature);
+    mintTo(auth, quantity, _msgSender(), tokenId, affiliate, signature);
   }
 
   function batchMintTo(
@@ -220,7 +220,7 @@ contract ArchetypeErc1155 is Initializable, ERC1155Upgradeable, OwnableUpgradeab
     );
 
     if (invite.limit < invite.maxSupply) {
-      _minted[msg.sender][auth.key] += args.totalQuantity;
+      _minted[_msgSender()][auth.key] += args.totalQuantity;
     }
     if (invite.maxSupply < 2**32 - 1) {
       _listSupply[auth.key] += args.totalQuantity;
