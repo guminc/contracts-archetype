@@ -714,9 +714,13 @@ contract ArchetypeMarketplace {
     }
 
     modifier _onlyPlatform() {
-        if (_msgSender() != PLATFORM) {
-        revert NotPlatform();
-        }
+        _checkPlatform();
         _;
+    }
+
+    function _checkPlatform() internal view {
+        if (_msgSender() != PLATFORM) {
+            revert NotPlatform();
+        }
     }
 }
