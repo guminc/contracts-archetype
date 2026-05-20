@@ -3,6 +3,12 @@ import { ethers, upgrades, run } from "hardhat";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
+  // Change this to your deployed marketplace contract address before running deployment.
+  const marketplaceAddress = ethers.ZeroAddress;
+  if (marketplaceAddress === ethers.ZeroAddress) {
+    throw new Error("marketplaceAddress is zero; set it to deployed marketplace contract address");
+  }
+
   const ArchetypeLogic = await ethers.getContractFactory(
     "ArchetypeLogicErc721a"
   );
@@ -23,7 +29,7 @@ async function main() {
 
   const Factory = await ethers.getContractFactory("FactoryErc721a");
 
-  const factory = await Factory.deploy(archetypeAddress);
+  const factory = await Factory.deploy(archetypeAddress, marketplaceAddress);
 
   const factoryAddress = await factory.getAddress();
 
