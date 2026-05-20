@@ -102,7 +102,7 @@ describe("FactoryErc721a", function () {
 
     const FactoryErc721a = await ethers.getContractFactory("FactoryErc721a");
     factory = asContractType<FactoryErc721a>(
-      await FactoryErc721a.deploy(archetypeAddress)
+      await FactoryErc721a.deploy(archetypeAddress, ethers.ZeroAddress)
     );
     const factoryAddress = await factory.getAddress();
 
@@ -153,6 +153,51 @@ describe("FactoryErc721a", function () {
 
     expect(symbol).to.equal(DEFAULT_SYMBOL);
     expect(owner).to.equal(accountOne.address);
+  });
+
+  it("should call marketplace enableRoyalty on collection deploy", async function () {
+    const [_, accountOne] = await ethers.getSigners();
+
+    const MockMarketplace = await ethers.getContractFactory("MockMarketplace");
+    const mockMarketplace = await MockMarketplace.deploy();
+
+    await factory.setMarketplace(await mockMarketplace.getAddress());
+
+    const tx = await factory.createCollection(
+      accountOne.address,
+      DEFAULT_NAME,
+      DEFAULT_SYMBOL,
+      DEFAULT_CONFIG,
+      DEFAULT_PAYOUT_CONFIG
+    );
+    const receipt = await tx.wait();
+    const newCollectionAddress = receipt!.logs[0].address;
+
+    expect(await mockMarketplace.test__lastToken()).to.equal(newCollectionAddress);
+    expect(await mockMarketplace.test__enableCalls()).to.equal(1);
+
+    await mockMarketplace.test__setShouldRevert(true);
+
+    await expect(
+      factory.createCollection(
+        accountOne.address,
+        DEFAULT_NAME,
+        DEFAULT_SYMBOL,
+        DEFAULT_CONFIG,
+        DEFAULT_PAYOUT_CONFIG
+      )
+    ).to.not.be.reverted;
+  });
+
+  it("should let owner set marketplace", async function () {
+    const [owner, nonOwner] = await ethers.getSigners();
+    const marketplace = (await ethers.getSigners())[7].address;
+
+    await factory.connect(owner).setMarketplace(marketplace);
+    expect(await factory.marketplace()).to.equal(marketplace);
+
+    await expect(factory.connect(nonOwner).setMarketplace(ethers.ZeroAddress)).to.be.reverted;
+    await factory.connect(owner).setMarketplace(ethers.ZeroAddress);
   });
 
   it("should initialize once and continue to work after initialized", async function () {

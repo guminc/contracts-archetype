@@ -17,6 +17,7 @@ pragma solidity ^0.8.20;
 
 import "./ArchetypeErc721a.sol";
 import "./ArchetypeLogicErc721a.sol";
+import "../IArchetypeMarketplace.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -27,10 +28,12 @@ contract FactoryErc721a is Ownable {
   event DeployFeeChanged(uint256 oldFee, uint256 newFee);
   
   address public archetype;
+  address public marketplace;
   uint256 public deployFee;
   
-  constructor(address archetype_) {
+  constructor(address archetype_, address marketplace_) {
     archetype = archetype_;
+    marketplace = marketplace_;
   }
   
   function createCollection(
@@ -49,6 +52,7 @@ contract FactoryErc721a is Ownable {
     ArchetypeErc721a token = ArchetypeErc721a(clone);
     token.initialize(name, symbol, config, payoutConfig, _receiver);
     token.transferOwnership(_receiver);
+    _enableMarketplaceRoyalty(clone);
     
     if (deployFee > 0) {
       address[] memory recipients = new address[](1);
@@ -83,6 +87,16 @@ contract FactoryErc721a is Ownable {
     uint256 oldFee = deployFee;
     deployFee = newFee;
     emit DeployFeeChanged(oldFee, newFee);
+  }
+
+  function setMarketplace(address marketplace_) public onlyOwner {
+    marketplace = marketplace_;
+  }
+
+  function _enableMarketplaceRoyalty(address tokenAddress) internal {
+    if (marketplace == address(0)) return;
+
+    try IArchetypeMarketplace(marketplace).enableRoyalty(tokenAddress) {} catch {}
   }
 
   function _refund(address to, uint256 refund) internal {
