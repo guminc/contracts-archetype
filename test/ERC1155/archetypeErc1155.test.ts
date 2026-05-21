@@ -160,10 +160,10 @@ describe("FactoryErc1155", function () {
   it("should call marketplace enableRoyalty on collection deploy", async function () {
     const [_, accountOne] = await ethers.getSigners();
 
-    const MockMarketplace = await ethers.getContractFactory("MockMarketplace");
-    const mockMarketplace = await MockMarketplace.deploy();
+    const MockArchetypeMarketplace = await ethers.getContractFactory("MockArchetypeMarketplace");
+    const mockArchetypeMarketplace = await MockArchetypeMarketplace.deploy();
 
-    await factory.setMarketplace(await mockMarketplace.getAddress());
+    await factory.setMarketplace(await mockArchetypeMarketplace.getAddress());
 
     const tx = await factory.createCollection(
       accountOne.address,
@@ -175,10 +175,10 @@ describe("FactoryErc1155", function () {
     const receipt = await tx.wait();
     const newCollectionAddress = receipt!.logs[0].address;
 
-    expect(await mockMarketplace.test__lastToken()).to.equal(newCollectionAddress);
-    expect(await mockMarketplace.test__enableCalls()).to.equal(1);
+    expect(await mockArchetypeMarketplace.test__lastToken()).to.equal(newCollectionAddress);
+    expect(await mockArchetypeMarketplace.test__enableCalls()).to.equal(1);
 
-    await mockMarketplace.test__setShouldRevert(true);
+    await mockArchetypeMarketplace.test__setShouldRevert(true);
 
     await expect(
       factory.createCollection(
@@ -1053,7 +1053,7 @@ describe("FactoryErc1155", function () {
     await nft.connect(owner).lockAffiliateFee("forever");
     await expect(nft.connect(owner).setAffiliateFee(20)).to.be.reverted;
     await expect(nft.connect(owner).setAffiliateDiscount(20)).to.be.reverted;
-  
+
     // CHANGE OWNER ALT PAYOUT
     await nft.connect(owner).setOwnerAltPayout(alt.address);
     await expect((await nft.connect(owner).payoutConfig()).ownerAltPayout).to.be.equal(alt.address);
@@ -1115,7 +1115,7 @@ describe("FactoryErc1155", function () {
   //   await expect(nftBurn.connect(minter).burnToMint([9, 10])).to.be.revertedWithCustomError(archetype, "NotTokenOwner");
 
   //   // try to burn invalid number of tokens
-  //   await expect(nftBurn.connect(minter).burnToMint([9])).to.be.revertedWithCustomError(archetype, 
+  //   await expect(nftBurn.connect(minter).burnToMint([9])).to.be.revertedWithCustomError(archetype,
   //     "InvalidAmountOfTokens"
   //   );
 
@@ -1129,7 +1129,7 @@ describe("FactoryErc1155", function () {
   //   await nftBurn.connect(owner).disableBurnToMint();
 
   //   // burn will fail as burn is disabled
-  //   await expect(nftBurn.connect(minter).burnToMint([11, 12])).to.be.revertedWithCustomError(archetype, 
+  //   await expect(nftBurn.connect(minter).burnToMint([11, 12])).to.be.revertedWithCustomError(archetype,
   //     "BurnToMintDisabled"
   //   );
 
@@ -1137,7 +1137,7 @@ describe("FactoryErc1155", function () {
   //   await nftBurn.connect(owner).enableBurnToMint(nftMint.address, false, 2, 10000000000, 5000);
 
   //   // burn will fail as burn is time is set in future
-  //   await expect(nftBurn.connect(minter).burnToMint([11, 12])).to.be.revertedWithCustomError(archetype, 
+  //   await expect(nftBurn.connect(minter).burnToMint([11, 12])).to.be.revertedWithCustomError(archetype,
   //     "MintNotYetStarted"
   //   );
 
@@ -1283,7 +1283,7 @@ describe("FactoryErc1155", function () {
     // await nftBurn.connect(minter).burnToMint(Array.from({ length: 20 }, (_, i) => i + 1));
 
     // // try to burn past max supply
-    // await expect(nftBurn.connect(minter).burnToMint([1000, 1001])).to.be.revertedWithCustomError(archetype, 
+    // await expect(nftBurn.connect(minter).burnToMint([1000, 1001])).to.be.revertedWithCustomError(archetype,
     //   "MaxSupplyExceeded"
     // );
 
@@ -1421,10 +1421,10 @@ describe("FactoryErc1155", function () {
 
    it("test default royalty eip 2981", async function () {
      const [accountZero, accountOne] = await ethers.getSigners();
- 
+
      const owner = accountOne;
      const holder = accountZero;
- 
+
      const newCollection = await factory.createCollection(
        owner.address,
        DEFAULT_NAME,
@@ -1432,21 +1432,21 @@ describe("FactoryErc1155", function () {
        DEFAULT_CONFIG,
        DEFAULT_PAYOUT_CONFIG
      );
- 
+
      const result = await newCollection.wait();
      const newCollectionAddress = result.logs[0].address || "";
      const nft = ArchetypeErc1155.attach(newCollectionAddress);
- 
+
      // console.log(owner.address);
      // console.log(holder.address);
- 
+
      function bigIntReplacer(key, value) {
        if (typeof value === "bigint") {
          return value.toString();
        }
        return value;
      }
- 
+
      await nft.royaltyInfo(0, ethers.parseEther("1"));
      await expect(
        JSON.stringify(
@@ -1456,7 +1456,7 @@ describe("FactoryErc1155", function () {
      ).to.be.equal(
        JSON.stringify([owner.address, ethers.parseEther("0.05")], bigIntReplacer)
      ); // 5% default royalty to owner
- 
+
      await nft.connect(owner).setDefaultRoyalty(holder.address, 1000);
      await expect(
        JSON.stringify(
@@ -1470,7 +1470,7 @@ describe("FactoryErc1155", function () {
        )
      ); // 10% royalty to holder
    });
- 
+
 
   it("test minting with erc20 list", async function () {
     const [accountZero, accountOne, accountTwo] = await ethers.getSigners();
@@ -2129,12 +2129,12 @@ describe("FactoryErc1155", function () {
   it("should account overpaid mints and refunds correctly", async () => {
       const [accountZero, accountOne, accountTwo, accountThree, accountFour] =
         await ethers.getSigners();
-  
+
       const owner = accountOne;
       const platform = accountTwo;
       const affiliate = accountThree;
       const dev = accountFour;
-  
+
       const newCollection = await factory.createCollection(
         owner.address,
         DEFAULT_NAME,
@@ -2142,16 +2142,16 @@ describe("FactoryErc1155", function () {
         DEFAULT_CONFIG,
         DEFAULT_PAYOUT_CONFIG
       );
-  
+
       const result = await newCollection.wait();
-  
+
       const newCollectionAddress = result.logs[0].address || "";
-  
+
       const nft = ArchetypeErc1155.attach(newCollectionAddress);
-  
+
       const mintPrice = ethers.parseEther("0.08");
       const paidPrice = ethers.parseEther("0.20");
-  
+
       await nft.connect(owner).setInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), {
         price: mintPrice,
         start: ethers.toBigInt(Math.floor(Date.now() / 1000)),
@@ -2162,19 +2162,19 @@ describe("FactoryErc1155", function () {
         tokenAddress: ZERO,
         tokenIds: [1],
       });
-  
+
       // valid signature (from affiliateSigner)
       const referral = await AFFILIATE_SIGNER.signMessage(
         ethers.getBytes(
           ethers.solidityPackedKeccak256(["address"], [affiliate.address])
         )
       );
-  
+
       const preContractBalance = await ethers.provider.getBalance(
         await nft.getAddress()
       );
       const preUserBalance = await ethers.provider.getBalance(accountZero);
-  
+
       await nft
         .connect(accountZero)
         .mintToken(
@@ -2187,16 +2187,16 @@ describe("FactoryErc1155", function () {
             value: paidPrice,
           }
         );
-  
+
       const postContractBalance = await ethers.provider.getBalance(
         await nft.getAddress()
       );
       const postUserBalance = await ethers.provider.getBalance(accountZero);
-  
+
       const delta = ethers.parseEther("0.001");
       expect(postUserBalance).closeTo(preUserBalance - mintPrice, delta);
       expect(postContractBalance).eq(preContractBalance + mintPrice);
-  
+
       await expect(await nft.ownerBalance()).to.equal(ethers.parseEther("0.068")); // 85%
       await expect(await nft.affiliateBalance(affiliate.address)).to.equal(
         ethers.parseEther("0.012")
@@ -2205,17 +2205,17 @@ describe("FactoryErc1155", function () {
 
     it("should require a fee to deploy a collection", async function () {
       const [accountZero, accountOne, accountTwo] = await ethers.getSigners();
-  
+
       const owner = accountOne;
       const holder = accountZero;
       const platform = accountTwo;
-  
+
       const deployPrice = ethers.parseEther('0.05')
-  
+
       await factory.connect(accountZero).setDeployFee(deployPrice)
-  
+
       expect(await factory.deployFee()).to.equal(deployPrice)
-  
+
       await expect(factory.createCollection(
         accountOne.address,
         DEFAULT_NAME,
@@ -2223,7 +2223,7 @@ describe("FactoryErc1155", function () {
         DEFAULT_CONFIG,
         DEFAULT_PAYOUT_CONFIG,
       )).to.be.revertedWithCustomError(factory, "InsufficientDeployFee");
-  
+
       const newCollection = await factory.createCollection(
         accountOne.address,
         DEFAULT_NAME,
@@ -2232,21 +2232,21 @@ describe("FactoryErc1155", function () {
         DEFAULT_PAYOUT_CONFIG,
         { value: deployPrice }
       );
-  
+
       const result = await newCollection.wait();
-  
+
       const newCollectionAddress = result.logs[0].address || "";
-  
+
       const nft = ArchetypeErc1155.attach(newCollectionAddress);
-  
+
       const symbol = await nft.symbol();
-  
+
       await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice);
-  
+
       // test overpay and refund
-  
+
       const preUserBalance = await ethers.provider.getBalance(accountOne.address);
-  
+
       const newCollectionTwo = await factory.connect(accountOne).createCollection(
         accountOne.address,
         DEFAULT_NAME,
@@ -2255,20 +2255,20 @@ describe("FactoryErc1155", function () {
         DEFAULT_PAYOUT_CONFIG,
         { value: ethers.parseEther("0.1") }
       );
-  
+
       const postFactoryBalance = await ethers.provider.getBalance(
         await factory.getAddress()
       );
       const postUserBalance = await ethers.provider.getBalance(accountOne.address);
-  
+
       const delta = ethers.parseEther("0.001");
       expect(postUserBalance).closeTo(preUserBalance - deployPrice, delta);
       expect(postFactoryBalance).eq(0);
-  
+
       await expect(await archetypePayouts.balance(platform.address)).to.equal(deployPrice * BigInt(2));
-  
+
     });
-  
+
 });
 
 // todo: add test to ensure affiliate signer can't be zero address

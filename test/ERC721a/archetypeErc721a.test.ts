@@ -158,10 +158,10 @@ describe("FactoryErc721a", function () {
   it("should call marketplace enableRoyalty on collection deploy", async function () {
     const [_, accountOne] = await ethers.getSigners();
 
-    const MockMarketplace = await ethers.getContractFactory("MockMarketplace");
-    const mockMarketplace = await MockMarketplace.deploy();
+    const MockArchetypeMarketplace = await ethers.getContractFactory("MockArchetypeMarketplace");
+    const mockArchetypeMarketplace = await MockArchetypeMarketplace.deploy();
 
-    await factory.setMarketplace(await mockMarketplace.getAddress());
+    await factory.setMarketplace(await mockArchetypeMarketplace.getAddress());
 
     const tx = await factory.createCollection(
       accountOne.address,
@@ -173,10 +173,10 @@ describe("FactoryErc721a", function () {
     const receipt = await tx.wait();
     const newCollectionAddress = receipt!.logs[0].address;
 
-    expect(await mockMarketplace.test__lastToken()).to.equal(newCollectionAddress);
-    expect(await mockMarketplace.test__enableCalls()).to.equal(1);
+    expect(await mockArchetypeMarketplace.test__lastToken()).to.equal(newCollectionAddress);
+    expect(await mockArchetypeMarketplace.test__enableCalls()).to.equal(1);
 
-    await mockMarketplace.test__setShouldRevert(true);
+    await mockArchetypeMarketplace.test__setShouldRevert(true);
 
     await expect(
       factory.createCollection(
@@ -3033,13 +3033,13 @@ describe("FactoryErc721a", function () {
       burnAddress: BURN,
       tokenAddress: tokenAddress,
     };
-    
+
     await nftBurn.connect(owner).setBurnInvite(ethers.ZeroHash, ipfsh.ctod(CID_ZERO), burnInvite);
 
     // Mint ERC20 tokens to minter
     await erc20.connect(minter).mint(ethers.parseEther("20"));
     await erc20.connect(minter).approve(await nftBurn.getAddress(), ethers.MaxUint256);
-    
+
     // Verify initial state
     expect(await nftBurn.balanceOf(minter.address)).to.equal(4);
     expect(await erc20.balanceOf(minter.address)).to.equal(ethers.parseEther("20"));
@@ -3058,7 +3058,7 @@ describe("FactoryErc721a", function () {
     expect(await erc20.balanceOf(await nftBurn.getAddress())).to.equal(ethers.parseEther("10"));
     expect(await nftBurn.ownerOf(1)).to.equal(BURN);
     expect(await nftBurn.ownerOf(2)).to.equal(BURN);
-    
+
     // Verify that burned tokens can't be burned again
     await expect(
       nftBurn.connect(minter).burnToMint(
