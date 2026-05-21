@@ -50,14 +50,3 @@ const brg404BackupFilePath = path.resolve(
 );
 fs.writeFileSync(brg404ContractPath, fs.readFileSync(brg404BackupFilePath, "utf8"));
 fs.unlinkSync(brg404BackupFilePath);
-
-const marketplaceContractPath = path.resolve(
-  __dirname,
-  "../contracts/ArchetypeMarketplace.sol"
-);
-const marketplaceBackupFilePath = path.resolve(
-  __dirname,
-  "../contracts/ArchetypeMarketplace.sol.bak"
-);
-fs.writeFileSync(marketplaceContractPath, fs.readFileSync(marketplaceBackupFilePath, "utf8"));
-fs.unlinkSync(marketplaceBackupFilePath);
